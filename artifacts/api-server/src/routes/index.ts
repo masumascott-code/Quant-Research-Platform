@@ -6,6 +6,7 @@ import tradesRouter from "./trades";
 import analyticsRouter from "./analytics";
 import learningRouter from "./learning";
 import reportsRouter from "./reports";
+import liveRouter from "./live";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use("/trades", tradesRouter);
 router.use("/analytics", analyticsRouter);
 router.use("/learning", learningRouter);
 router.use("/reports", reportsRouter);
+router.use("/live", liveRouter);
 
 export default router;

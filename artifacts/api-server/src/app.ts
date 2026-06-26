@@ -4,6 +4,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { ScannerService } from "./services/scanner";
+import { PriceTracker } from "./services/price-tracker";
 
 const app: Express = express();
 
@@ -32,10 +33,13 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
-// Auto-start scanner when server boots (non-blocking)
+// Auto-start scanner and price tracker when server boots (non-blocking)
 setTimeout(() => {
   const scanner = ScannerService.getInstance();
   scanner.start().catch(err => logger.error({ err }, "Failed to auto-start scanner"));
+
+  const tracker = PriceTracker.getInstance();
+  tracker.start().catch(err => logger.error({ err }, "Failed to start price tracker"));
 }, 3000);
 
 export default app;
