@@ -1,8 +1,20 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import scannerRouter from "./scanner";
+import signalsRouter from "./signals";
+import tradesRouter from "./trades";
+import analyticsRouter from "./analytics";
+import learningRouter from "./learning";
+import reportsRouter from "./reports";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use("/scanner", scannerRouter);
+router.use("/signals", signalsRouter);
+router.use("/trades", tradesRouter);
+router.use("/analytics", analyticsRouter);
+router.use("/learning", learningRouter);
+router.use("/reports", reportsRouter);
 
 export default router;

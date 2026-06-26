@@ -1,22 +1,33 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Binance Futures Paper Trading Research Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: scanner
+    description: Market scanner operations
+  - name: signals
+    description: Trading signal operations
+  - name: trades
+    description: Paper trade operations
+  - name: analytics
+    description: Analytics and performance
+  - name: learning
+    description: Learning engine operations
+  - name: reports
+    description: Performance reports
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +35,943 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /scanner/status:
+    get:
+      operationId: getScannerStatus
+      tags: [scanner]
+      summary: Get scanner status
+      responses:
+        "200":
+          description: Scanner status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScannerStatus"
+
+  /scanner/start:
+    post:
+      operationId: startScanner
+      tags: [scanner]
+      summary: Start the market scanner
+      responses:
+        "200":
+          description: Scanner started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+
+  /scanner/stop:
+    post:
+      operationId: stopScanner
+      tags: [scanner]
+      summary: Stop the market scanner
+      responses:
+        "200":
+          description: Scanner stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+
+  /scanner/gainers:
+    get:
+      operationId: getTopGainers
+      tags: [scanner]
+      summary: Get top gainers list
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Top gainers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MarketSnapshot"
+
+  /scanner/losers:
+    get:
+      operationId: getTopLosers
+      tags: [scanner]
+      summary: Get top losers list
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Top losers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MarketSnapshot"
+
+  /scanner/coins:
+    get:
+      operationId: getCoins
+      tags: [scanner]
+      summary: Get all tracked coins
+      responses:
+        "200":
+          description: Coins list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Coin"
+
+  /scanner/dashboard:
+    get:
+      operationId: getScannerDashboard
+      tags: [scanner]
+      summary: Get scanner dashboard summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScannerDashboard"
+
+  /signals:
+    get:
+      operationId: getSignals
+      tags: [signals]
+      summary: Get all signals
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, active, expired, traded]
+        - name: direction
+          in: query
+          schema:
+            type: string
+            enum: [LONG, SHORT]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Signals list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Signal"
+
+  /signals/{id}:
+    get:
+      operationId: getSignal
+      tags: [signals]
+      summary: Get signal by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Signal detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Signal"
+        "404":
+          description: Not found
+
+  /signals/active:
+    get:
+      operationId: getActiveSignals
+      tags: [signals]
+      summary: Get currently active signals
+      responses:
+        "200":
+          description: Active signals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Signal"
+
+  /trades:
+    get:
+      operationId: getTrades
+      tags: [trades]
+      summary: Get all paper trades
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, closed]
+        - name: direction
+          in: query
+          schema:
+            type: string
+            enum: [LONG, SHORT]
+        - name: result
+          in: query
+          schema:
+            type: string
+            enum: [WIN, LOSS, BREAKEVEN]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Trades list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaperTrade"
+
+  /trades/open:
+    get:
+      operationId: getOpenTrades
+      tags: [trades]
+      summary: Get currently open trades
+      responses:
+        "200":
+          description: Open trades
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaperTrade"
+
+  /trades/{id}:
+    get:
+      operationId: getTrade
+      tags: [trades]
+      summary: Get trade by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trade detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperTrade"
+        "404":
+          description: Not found
+
+  /trades/{id}/close:
+    post:
+      operationId: closeTrade
+      tags: [trades]
+      summary: Manually close a trade
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloseTradeInput"
+      responses:
+        "200":
+          description: Trade closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperTrade"
+
+  /analytics/dashboard:
+    get:
+      operationId: getAnalyticsDashboard
+      tags: [analytics]
+      summary: Get full analytics dashboard
+      responses:
+        "200":
+          description: Analytics dashboard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsDashboard"
+
+  /analytics/performance:
+    get:
+      operationId: getPerformanceStats
+      tags: [analytics]
+      summary: Get overall performance statistics
+      responses:
+        "200":
+          description: Performance stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PerformanceStats"
+
+  /analytics/daily:
+    get:
+      operationId: getDailyPerformance
+      tags: [analytics]
+      summary: Get daily performance history
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 30
+      responses:
+        "200":
+          description: Daily performance
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DailyPerformance"
+
+  /analytics/setup-stats:
+    get:
+      operationId: getSetupStats
+      tags: [analytics]
+      summary: Get setup statistics and rankings
+      responses:
+        "200":
+          description: Setup statistics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SetupStat"
+
+  /analytics/best-hours:
+    get:
+      operationId: getBestTradingHours
+      tags: [analytics]
+      summary: Get best and worst trading hours
+      responses:
+        "200":
+          description: Trading hours analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingHoursAnalysis"
+
+  /analytics/pnl-curve:
+    get:
+      operationId: getPnlCurve
+      tags: [analytics]
+      summary: Get cumulative PnL curve data
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 30
+      responses:
+        "200":
+          description: PnL curve
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PnlPoint"
+
+  /learning/reviews:
+    get:
+      operationId: getTradeReviews
+      tags: [learning]
+      summary: Get trade reviews from learning engine
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Trade reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TradeReview"
+
+  /learning/insights:
+    get:
+      operationId: getLearningInsights
+      tags: [learning]
+      summary: Get current learning insights and improvement notes
+      responses:
+        "200":
+          description: Learning insights
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningInsights"
+
+  /learning/rvol-analysis:
+    get:
+      operationId: getRvolAnalysis
+      tags: [learning]
+      summary: Get best RVOL ranges analysis
+      responses:
+        "200":
+          description: RVOL analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RvolAnalysis"
+
+  /reports/daily:
+    get:
+      operationId: getDailyReport
+      tags: [reports]
+      summary: Get today's daily report
+      responses:
+        "200":
+          description: Daily report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyReport"
+
+  /reports/weekly:
+    get:
+      operationId: getWeeklyReport
+      tags: [reports]
+      summary: Get this week's report
+      responses:
+        "200":
+          description: Weekly report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeeklyReport"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    ActionResult:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+
+    ScannerStatus:
+      type: object
+      required: [running, lastScanAt, totalCoinsTracked, openTrades, dailyTrades, weeklyTrades]
+      properties:
+        running:
+          type: boolean
+        lastScanAt:
+          type: ["string", "null"]
+        totalCoinsTracked:
+          type: integer
+        openTrades:
+          type: integer
+        dailyTrades:
+          type: integer
+        weeklyTrades:
+          type: integer
+        nextScanIn:
+          type: ["integer", "null"]
+
+    ScannerDashboard:
+      type: object
+      required: [scannerRunning, totalCoins, topGainersCount, topLosersCount, activeSignals, openTrades, todayPnl, totalPnl, winRate]
+      properties:
+        scannerRunning:
+          type: boolean
+        totalCoins:
+          type: integer
+        topGainersCount:
+          type: integer
+        topLosersCount:
+          type: integer
+        activeSignals:
+          type: integer
+        openTrades:
+          type: integer
+        todayPnl:
+          type: number
+        totalPnl:
+          type: number
+        winRate:
+          type: number
+        lastScanAt:
+          type: ["string", "null"]
+
+    Coin:
+      type: object
+      required: [id, symbol, baseAsset, quoteAsset, isActive]
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        baseAsset:
+          type: string
+        quoteAsset:
+          type: string
+        isActive:
+          type: boolean
+        lastPrice:
+          type: ["number", "null"]
+        volume24h:
+          type: ["number", "null"]
+        priceChangePercent:
+          type: ["number", "null"]
+
+    MarketSnapshot:
+      type: object
+      required: [id, symbol, price, priceChangePercent, volume24h, rvol, rank]
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        price:
+          type: number
+        priceChangePercent:
+          type: number
+        volume24h:
+          type: number
+        rvol:
+          type: number
+        rank:
+          type: integer
+        ema20:
+          type: ["number", "null"]
+        ema50:
+          type: ["number", "null"]
+        atr14:
+          type: ["number", "null"]
+        trend:
+          type: ["string", "null"]
+        scannedAt:
+          type: string
+
+    Signal:
+      type: object
+      required: [id, symbol, direction, score, grade, entryPrice, stopLoss, tp1, tp2, tp3, status, reason, createdAt]
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        direction:
+          type: string
+          enum: [LONG, SHORT]
+        score:
+          type: number
+        grade:
+          type: string
+          enum: [A+, A]
+        entryPrice:
+          type: number
+        stopLoss:
+          type: number
+        tp1:
+          type: number
+        tp2:
+          type: number
+        tp3:
+          type: number
+        rrRatio:
+          type: ["number", "null"]
+        status:
+          type: string
+          enum: [pending, active, expired, traded]
+        reason:
+          type: string
+        slReason:
+          type: ["string", "null"]
+        trendScore:
+          type: ["number", "null"]
+        structureScore:
+          type: ["number", "null"]
+        volumeScore:
+          type: ["number", "null"]
+        breakoutScore:
+          type: ["number", "null"]
+        retestScore:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+        expiresAt:
+          type: ["string", "null"]
+
+    PaperTrade:
+      type: object
+      required: [id, tradeId, symbol, direction, entryPrice, stopLoss, tp1, tp2, tp3, quantity, signalScore, reason, status, openedAt]
+      properties:
+        id:
+          type: integer
+        tradeId:
+          type: string
+        symbol:
+          type: string
+        direction:
+          type: string
+          enum: [LONG, SHORT]
+        entryPrice:
+          type: number
+        stopLoss:
+          type: number
+        currentSl:
+          type: ["number", "null"]
+        tp1:
+          type: number
+        tp2:
+          type: number
+        tp3:
+          type: number
+        quantity:
+          type: number
+        signalScore:
+          type: number
+        signalGrade:
+          type: ["string", "null"]
+        reason:
+          type: string
+        slReason:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [open, closed]
+        result:
+          type: ["string", "null"]
+          enum: [WIN, LOSS, BREAKEVEN, null]
+        tp1Hit:
+          type: boolean
+        tp2Hit:
+          type: boolean
+        tp3Hit:
+          type: boolean
+        exitPrice:
+          type: ["number", "null"]
+        exitReason:
+          type: ["string", "null"]
+        pnl:
+          type: ["number", "null"]
+        pnlPercent:
+          type: ["number", "null"]
+        holdingDurationMinutes:
+          type: ["integer", "null"]
+        openedAt:
+          type: string
+        closedAt:
+          type: ["string", "null"]
+
+    CloseTradeInput:
+      type: object
+      required: [exitPrice, exitReason]
+      properties:
+        exitPrice:
+          type: number
+        exitReason:
+          type: string
+
+    AnalyticsDashboard:
+      type: object
+      required: [performance, recentTrades, dailyPerformance, setupStats]
+      properties:
+        performance:
+          $ref: "#/components/schemas/PerformanceStats"
+        recentTrades:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaperTrade"
+        dailyPerformance:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailyPerformance"
+        setupStats:
+          type: array
+          items:
+            $ref: "#/components/schemas/SetupStat"
+
+    PerformanceStats:
+      type: object
+      required: [totalTrades, wins, losses, breakevens, winRate, totalPnl, avgPnl, avgWin, avgLoss, profitFactor, maxDrawdown, avgHoldingMinutes, avgScore]
+      properties:
+        totalTrades:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        breakevens:
+          type: integer
+        winRate:
+          type: number
+        totalPnl:
+          type: number
+        avgPnl:
+          type: number
+        avgWin:
+          type: number
+        avgLoss:
+          type: number
+        profitFactor:
+          type: number
+        maxDrawdown:
+          type: number
+        avgHoldingMinutes:
+          type: number
+        avgScore:
+          type: number
+        bestTrade:
+          $ref: "#/components/schemas/PaperTrade"
+        worstTrade:
+          $ref: "#/components/schemas/PaperTrade"
+
+    DailyPerformance:
+      type: object
+      required: [date, trades, wins, losses, pnl, winRate]
+      properties:
+        date:
+          type: string
+        trades:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        pnl:
+          type: number
+        winRate:
+          type: number
+
+    SetupStat:
+      type: object
+      required: [setupType, totalTrades, wins, losses, winRate, avgPnl, avgScore]
+      properties:
+        setupType:
+          type: string
+        direction:
+          type: string
+        totalTrades:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        winRate:
+          type: number
+        avgPnl:
+          type: number
+        avgScore:
+          type: number
+        ranking:
+          type: ["integer", "null"]
+
+    TradingHoursAnalysis:
+      type: object
+      required: [hourlyStats, bestHours, worstHours]
+      properties:
+        hourlyStats:
+          type: array
+          items:
+            $ref: "#/components/schemas/HourlyStat"
+        bestHours:
+          type: array
+          items:
+            type: integer
+        worstHours:
+          type: array
+          items:
+            type: integer
+
+    HourlyStat:
+      type: object
+      required: [hour, trades, winRate, avgPnl]
+      properties:
+        hour:
+          type: integer
+        trades:
+          type: integer
+        winRate:
+          type: number
+        avgPnl:
+          type: number
+
+    PnlPoint:
+      type: object
+      required: [date, cumulativePnl, dailyPnl]
+      properties:
+        date:
+          type: string
+        cumulativePnl:
+          type: number
+        dailyPnl:
+          type: number
+
+    TradeReview:
+      type: object
+      required: [id, tradeId, symbol, direction, result, analysisReason, lessonsLearned, createdAt]
+      properties:
+        id:
+          type: integer
+        tradeId:
+          type: string
+        symbol:
+          type: string
+        direction:
+          type: string
+        result:
+          type: string
+        analysisReason:
+          type: string
+        lessonsLearned:
+          type: string
+        improvementNotes:
+          type: ["string", "null"]
+        setupQuality:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    LearningInsights:
+      type: object
+      required: [totalReviews, bestSetups, worstSetups, improvementNotes, keyLessons]
+      properties:
+        totalReviews:
+          type: integer
+        bestSetups:
+          type: array
+          items:
+            type: string
+        worstSetups:
+          type: array
+          items:
+            type: string
+        improvementNotes:
+          type: array
+          items:
+            type: string
+        keyLessons:
+          type: array
+          items:
+            type: string
+        avgWinScore:
+          type: ["number", "null"]
+        avgLossScore:
+          type: ["number", "null"]
+
+    RvolAnalysis:
+      type: object
+      required: [ranges]
+      properties:
+        ranges:
+          type: array
+          items:
+            $ref: "#/components/schemas/RvolRange"
+        bestRange:
+          type: ["string", "null"]
+
+    RvolRange:
+      type: object
+      required: [rangeLabel, minRvol, maxRvol, trades, winRate, avgPnl]
+      properties:
+        rangeLabel:
+          type: string
+        minRvol:
+          type: number
+        maxRvol:
+          type: number
+        trades:
+          type: integer
+        winRate:
+          type: number
+        avgPnl:
+          type: number
+
+    DailyReport:
+      type: object
+      required: [date, totalTrades, wins, losses, pnl, winRate, bestTrade, summary]
+      properties:
+        date:
+          type: string
+        totalTrades:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        pnl:
+          type: number
+        winRate:
+          type: number
+        summary:
+          type: string
+        bestTrade:
+          type: ["string", "null"]
+        topSignals:
+          type: array
+          items:
+            type: string
+
+    WeeklyReport:
+      type: object
+      required: [weekStart, weekEnd, totalTrades, wins, losses, pnl, winRate, summary, improvements]
+      properties:
+        weekStart:
+          type: string
+        weekEnd:
+          type: string
+        totalTrades:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        pnl:
+          type: number
+        winRate:
+          type: number
+        summary:
+          type: string
+        improvements:
+          type: array
+          items:
+            type: string

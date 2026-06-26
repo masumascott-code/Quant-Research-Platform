@@ -1,0 +1,191 @@
+import { useGetScannerStatus, useStartScanner, useStopScanner, getGetScannerStatusQueryKey, useGetTopGainers, useGetTopLosers, getGetTopGainersQueryKey, getGetTopLosersQueryKey } from "@workspace/api-client-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { Play, Square, Activity, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+export default function Scanner() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: status, isLoading: statusLoading } = useGetScannerStatus({
+    query: {
+      queryKey: getGetScannerStatusQueryKey(),
+      refetchInterval: 5000
+    }
+  });
+
+  const { data: gainers, isLoading: gainersLoading } = useGetTopGainers(
+    { limit: 5 },
+    {
+      query: {
+        queryKey: getGetTopGainersQueryKey({ limit: 5 }),
+        refetchInterval: 30000
+      }
+    }
+  );
+
+  const { data: losers, isLoading: losersLoading } = useGetTopLosers(
+    { limit: 5 },
+    {
+      query: {
+        queryKey: getGetTopLosersQueryKey({ limit: 5 }),
+        refetchInterval: 30000
+      }
+    }
+  );
+
+  const startMutation = useStartScanner();
+  const stopMutation = useStopScanner();
+
+  const handleToggleScanner = () => {
+    if (status?.running) {
+      stopMutation.mutate(undefined, {
+        onSuccess: () => {
+          toast({ title: "Scanner Stopped", description: "Market scanning has been halted." });
+          queryClient.invalidateQueries({ queryKey: getGetScannerStatusQueryKey() });
+        }
+      });
+    } else {
+      startMutation.mutate(undefined, {
+        onSuccess: () => {
+          toast({ title: "Scanner Started", description: "Market scanning initialized." });
+          queryClient.invalidateQueries({ queryKey: getGetScannerStatusQueryKey() });
+        }
+      });
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Live Scanner Control</h1>
+          <p className="text-sm text-muted-foreground mt-1">Real-time market analysis engine</p>
+        </div>
+        <div className="flex items-center gap-4 bg-card p-2 rounded-lg border border-border">
+          <div className="flex flex-col px-4 border-r border-border">
+            <span className="text-[10px] uppercase text-muted-foreground font-mono">Coins Tracked</span>
+            <span className="font-mono font-bold text-lg">{statusLoading ? '---' : status?.totalCoinsTracked || 0}</span>
+          </div>
+          <div className="flex flex-col px-4">
+            <span className="text-[10px] uppercase text-muted-foreground font-mono">Status</span>
+            <span className={`font-mono font-bold text-sm flex items-center gap-2 mt-1 ${status?.running ? 'text-success' : 'text-destructive'}`}>
+              <span className={`h-2 w-2 rounded-full ${status?.running ? 'bg-success animate-pulse' : 'bg-destructive'}`} />
+              {status?.running ? 'RUNNING' : 'HALTED'}
+            </span>
+          </div>
+          <Button 
+            variant={status?.running ? "destructive" : "default"} 
+            className={`ml-2 font-mono uppercase tracking-wider ${!status?.running ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''}`}
+            onClick={handleToggleScanner}
+            disabled={startMutation.isPending || stopMutation.isPending || statusLoading}
+          >
+            {status?.running ? (
+              <><Square className="mr-2 h-4 w-4" fill="currentColor" /> Stop Scanner</>
+            ) : (
+              <><Play className="mr-2 h-4 w-4" fill="currentColor" /> Start Scanner</>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="border-border bg-card/50">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 border-b border-border/50">
+            <CardTitle className="text-sm font-medium flex items-center gap-2 text-success">
+              <ArrowUpRight className="h-4 w-4" />
+              TOP GAINERS
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="font-mono text-xs text-muted-foreground">SYMBOL</TableHead>
+                  <TableHead className="font-mono text-xs text-muted-foreground text-right">PRICE</TableHead>
+                  <TableHead className="font-mono text-xs text-muted-foreground text-right">24H %</TableHead>
+                  <TableHead className="font-mono text-xs text-muted-foreground text-right">RVOL</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {gainersLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i} className="border-border">
+                      <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                      <TableCell align="right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
+                      <TableCell align="right"><Skeleton className="h-4 w-12 ml-auto" /></TableCell>
+                      <TableCell align="right"><Skeleton className="h-4 w-10 ml-auto" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : gainers?.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-6 text-muted-foreground font-mono text-sm">NO GAINERS DETECTED</TableCell>
+                  </TableRow>
+                ) : (
+                  gainers?.map((coin) => (
+                    <TableRow key={coin.symbol} className="border-border hover:bg-muted/50">
+                      <TableCell className="font-mono font-bold">{coin.symbol}</TableCell>
+                      <TableCell className="font-mono text-right">{coin.price.toFixed(4)}</TableCell>
+                      <TableCell className="font-mono text-right text-success">+{coin.priceChangePercent.toFixed(2)}%</TableCell>
+                      <TableCell className="font-mono text-right text-muted-foreground">{coin.rvol.toFixed(1)}x</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border bg-card/50">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 border-b border-border/50">
+            <CardTitle className="text-sm font-medium flex items-center gap-2 text-destructive">
+              <ArrowDownRight className="h-4 w-4" />
+              TOP LOSERS
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="font-mono text-xs text-muted-foreground">SYMBOL</TableHead>
+                  <TableHead className="font-mono text-xs text-muted-foreground text-right">PRICE</TableHead>
+                  <TableHead className="font-mono text-xs text-muted-foreground text-right">24H %</TableHead>
+                  <TableHead className="font-mono text-xs text-muted-foreground text-right">RVOL</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {losersLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i} className="border-border">
+                      <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                      <TableCell align="right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
+                      <TableCell align="right"><Skeleton className="h-4 w-12 ml-auto" /></TableCell>
+                      <TableCell align="right"><Skeleton className="h-4 w-10 ml-auto" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : losers?.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-6 text-muted-foreground font-mono text-sm">NO LOSERS DETECTED</TableCell>
+                  </TableRow>
+                ) : (
+                  losers?.map((coin) => (
+                    <TableRow key={coin.symbol} className="border-border hover:bg-muted/50">
+                      <TableCell className="font-mono font-bold">{coin.symbol}</TableCell>
+                      <TableCell className="font-mono text-right">{coin.price.toFixed(4)}</TableCell>
+                      <TableCell className="font-mono text-right text-destructive">{coin.priceChangePercent.toFixed(2)}%</TableCell>
+                      <TableCell className="font-mono text-right text-muted-foreground">{coin.rvol.toFixed(1)}x</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
