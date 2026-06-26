@@ -5,6 +5,7 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 import { ScannerService } from "./services/scanner";
 import { PriceTracker } from "./services/price-tracker";
+import { SlMonitor } from "./services/sl-monitor";
 
 const app: Express = express();
 
@@ -40,6 +41,11 @@ setTimeout(() => {
 
   const tracker = PriceTracker.getInstance();
   tracker.start().catch(err => logger.error({ err }, "Failed to start price tracker"));
+
+  // Start SL/TP monitor after price tracker has had time to fetch initial prices
+  setTimeout(() => {
+    SlMonitor.getInstance().start();
+  }, 5_000);
 }, 3000);
 
 export default app;
