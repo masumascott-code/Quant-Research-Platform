@@ -5,10 +5,12 @@ import { signalsTable } from "./signals";
 
 export const paperTradesTable = pgTable("paper_trades", {
   id: serial("id").primaryKey(),
-  tradeId: text("trade_id").notNull().unique(), // e.g. "PT-20240101-001"
+  tradeId: text("trade_id").notNull().unique(),
   signalId: integer("signal_id").references(() => signalsTable.id),
   symbol: text("symbol").notNull(),
-  direction: text("direction").notNull(), // 'LONG' | 'SHORT'
+  direction: text("direction").notNull(),
+  setupType: text("setup_type"),
+  confidence: text("confidence"),
   entryPrice: numeric("entry_price", { precision: 20, scale: 8 }).notNull(),
   stopLoss: numeric("stop_loss", { precision: 20, scale: 8 }).notNull(),
   currentSl: numeric("current_sl", { precision: 20, scale: 8 }),
@@ -20,8 +22,8 @@ export const paperTradesTable = pgTable("paper_trades", {
   signalGrade: text("signal_grade"),
   reason: text("reason").notNull(),
   slReason: text("sl_reason"),
-  status: text("status").notNull().default("open"), // 'open' | 'closed'
-  result: text("result"), // 'WIN' | 'LOSS' | 'BREAKEVEN'
+  status: text("status").notNull().default("open"),
+  result: text("result"),
   tp1Hit: boolean("tp1_hit").notNull().default(false),
   tp2Hit: boolean("tp2_hit").notNull().default(false),
   tp3Hit: boolean("tp3_hit").notNull().default(false),
@@ -29,6 +31,8 @@ export const paperTradesTable = pgTable("paper_trades", {
   exitReason: text("exit_reason"),
   pnl: numeric("pnl", { precision: 20, scale: 8 }),
   pnlPercent: numeric("pnl_percent", { precision: 10, scale: 4 }),
+  maxDrawdown: numeric("max_drawdown", { precision: 10, scale: 4 }),
+  maxProfit: numeric("max_profit", { precision: 10, scale: 4 }),
   holdingDurationMinutes: integer("holding_duration_minutes"),
   openedAt: timestamp("opened_at").notNull().defaultNow(),
   closedAt: timestamp("closed_at"),

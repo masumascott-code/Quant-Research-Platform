@@ -10,7 +10,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarProvider,
 } from "@/components/ui/sidebar";
 import { useGetScannerStatus, getGetScannerStatusQueryKey } from "@workspace/api-client-react";
 import {
@@ -19,8 +18,11 @@ import {
   BookOpen,
   Briefcase,
   Crosshair,
+  Eye,
   FileText,
   LayoutDashboard,
+  Settings,
+  Shield,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
@@ -30,8 +32,8 @@ export function AppSidebar() {
   const { data: status } = useGetScannerStatus({
     query: {
       queryKey: getGetScannerStatusQueryKey(),
-      refetchInterval: 30000
-    }
+      refetchInterval: 15000,
+    },
   });
 
   const routes = [
@@ -50,6 +52,7 @@ export function AppSidebar() {
       items: [
         { name: "Open Trades", path: "/trades/open", icon: Briefcase },
         { name: "Trade Journal", path: "/trades/journal", icon: BookOpen },
+        { name: "Watchlist", path: "/watchlist", icon: Eye },
       ],
     },
     {
@@ -58,6 +61,12 @@ export function AppSidebar() {
         { name: "Analytics", path: "/analytics", icon: BarChart2 },
         { name: "Learning Center", path: "/learning", icon: BookOpen },
         { name: "Reports", path: "/reports", icon: FileText },
+      ],
+    },
+    {
+      label: "System",
+      items: [
+        { name: "Admin Panel", path: "/admin", icon: Settings },
       ],
     },
   ];
@@ -71,12 +80,15 @@ export function AppSidebar() {
           <div className="bg-primary/20 p-1.5 rounded text-primary">
             <Activity className="h-5 w-5" />
           </div>
-          <div className="font-bold tracking-tight text-foreground">
-            QUANT<span className="text-primary">EDGE</span>
+          <div>
+            <div className="font-bold tracking-tight text-foreground leading-tight">
+              QUANT<span className="text-primary">EDGE</span>
+            </div>
+            <div className="text-[10px] font-mono text-muted-foreground tracking-widest">AI v2.0</div>
           </div>
         </div>
       </SidebarHeader>
-      
+
       <SidebarContent>
         {routes.map((group) => (
           <SidebarGroup key={group.label}>
@@ -89,7 +101,10 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       asChild
-                      isActive={location === item.path || (item.path !== "/" && location.startsWith(item.path))}
+                      isActive={
+                        location === item.path ||
+                        (item.path !== "/" && location.startsWith(item.path))
+                      }
                       tooltip={item.name}
                     >
                       <Link href={item.path} className="flex items-center gap-3">
@@ -105,15 +120,23 @@ export function AppSidebar() {
         ))}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-border p-4">
+      <SidebarFooter className="border-t border-border p-4 space-y-2">
         <div className="flex items-center justify-between">
-          <div className="text-xs font-mono text-muted-foreground">Scanner Status</div>
-          <div className="flex items-center gap-2">
-            <div className={`h-2 w-2 rounded-full ${isRunning ? 'bg-success animate-pulse' : 'bg-destructive'}`} />
-            <span className={`text-xs font-mono font-bold ${isRunning ? 'text-success' : 'text-destructive'}`}>
-              {isRunning ? 'RUNNING' : 'STOPPED'}
+          <div className="text-xs font-mono text-muted-foreground">Scanner</div>
+          <div className="flex items-center gap-1.5">
+            <div
+              className={`h-2 w-2 rounded-full ${isRunning ? "bg-green-400 animate-pulse" : "bg-red-500"}`}
+            />
+            <span
+              className={`text-xs font-mono font-bold ${isRunning ? "text-green-400" : "text-red-400"}`}
+            >
+              {isRunning ? "LIVE" : "OFF"}
             </span>
           </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-mono text-muted-foreground">Mode</div>
+          <div className="text-xs font-mono text-primary font-bold">PAPER</div>
         </div>
       </SidebarFooter>
     </Sidebar>

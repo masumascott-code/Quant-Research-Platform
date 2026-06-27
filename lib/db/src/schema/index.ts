@@ -5,3 +5,5 @@ export * from "./paper_trades";
 export * from "./trade_reviews";
 export * from "./setup_statistics";
 export * from "./daily_performance";
+export * from "./watchlist";
+export * from "./system_settings";

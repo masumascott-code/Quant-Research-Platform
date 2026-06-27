@@ -13,11 +13,7 @@ async function sendMessage(text: string): Promise<void> {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: CHAT_ID,
-        text,
-        parse_mode: "HTML",
-      }),
+      body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: "HTML" }),
     });
     if (!res.ok) {
       const body = await res.text();
@@ -28,27 +24,42 @@ async function sendMessage(text: string): Promise<void> {
   }
 }
 
+function confidenceEmoji(c?: string): string {
+  switch (c) {
+    case "Extreme": return "🔥";
+    case "Very High": return "⭐⭐";
+    case "High": return "⭐";
+    case "Medium": return "🔶";
+    default: return "🔵";
+  }
+}
+
+function setupEmoji(t?: string): string {
+  switch (t) {
+    case "Resistance Breakout": return "💥";
+    case "Breakout Retest": return "🔁";
+    case "EMA Pullback": return "📐";
+    case "Support Bounce": return "🛡️";
+    case "Volume Expansion": return "📊";
+    case "Trend Continuation": return "🚀";
+    default: return "📌";
+  }
+}
+
 export const Telegram = {
   async scannerStarted() {
-    await sendMessage(`🟢 <b>Scanner Started</b>\nBinance Futures Paper Trading Scanner is now active.\nScanning every 60 seconds for A/A+ setups.`);
+    await sendMessage(
+      `🟢 <b>QUANTEDGE AI v2.0 — Scanner Active</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `Scanning every <b>30 seconds</b>\n` +
+      `Only A/A+ setups (Score ≥90)\n` +
+      `8-Factor Scoring | Multi-Timeframe\n` +
+      `Risk Manager: Active ✅`
+    );
   },
 
   async scannerStopped() {
     await sendMessage(`🔴 <b>Scanner Stopped</b>\nMarket scanner has been stopped.`);
-  },
-
-  async gainersUpdated(gainers: { symbol: string; priceChangePercent: number; rvol: number }[]) {
-    if (gainers.length === 0) return;
-    const top5 = gainers.slice(0, 5);
-    const lines = top5.map((g, i) => `${i + 1}. <b>${g.symbol}</b> +${g.priceChangePercent.toFixed(2)}% | RVOL: ${g.rvol.toFixed(2)}x`);
-    await sendMessage(`📈 <b>Top Gainers Updated</b>\n${lines.join("\n")}`);
-  },
-
-  async losersUpdated(losers: { symbol: string; priceChangePercent: number; rvol: number }[]) {
-    if (losers.length === 0) return;
-    const top5 = losers.slice(0, 5);
-    const lines = top5.map((g, i) => `${i + 1}. <b>${g.symbol}</b> ${g.priceChangePercent.toFixed(2)}% | RVOL: ${g.rvol.toFixed(2)}x`);
-    await sendMessage(`📉 <b>Top Losers Updated</b>\n${lines.join("\n")}`);
   },
 
   async signalCreated(signal: {
@@ -56,6 +67,8 @@ export const Telegram = {
     direction: string;
     score: number;
     grade: string;
+    confidence?: string;
+    setupType?: string;
     entryPrice: number;
     stopLoss: number;
     tp1: number;
@@ -63,20 +76,30 @@ export const Telegram = {
     tp3: number;
     rrRatio: number | null;
     reason: string;
+    whyNow?: string;
+    timeframeAlignment?: string;
   }) {
     const dir = signal.direction === "LONG" ? "🟢 LONG" : "🔴 SHORT";
     const grade = signal.grade === "A+" ? "⭐ A+" : "✅ A";
+    const conf = confidenceEmoji(signal.confidence);
+    const setup = setupEmoji(signal.setupType);
+
     await sendMessage(
-      `🎯 <b>Signal Generated</b> ${grade}\n` +
+      `🎯 <b>SIGNAL DETECTED</b> ${grade} ${conf}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
       `${dir} <b>${signal.symbol}</b>\n` +
-      `Score: <b>${signal.score.toFixed(1)}/100</b>\n\n` +
-      `Entry: <code>${signal.entryPrice}</code>\n` +
-      `SL: <code>${signal.stopLoss}</code>\n` +
-      `TP1: <code>${signal.tp1}</code>\n` +
-      `TP2: <code>${signal.tp2}</code>\n` +
-      `TP3: <code>${signal.tp3}</code>\n` +
-      `RR: ${signal.rrRatio ? signal.rrRatio.toFixed(2) + ":1" : "N/A"}\n\n` +
-      `<i>Why: ${signal.reason}</i>`
+      `${setup} Setup: <b>${signal.setupType ?? "Unknown"}</b>\n` +
+      `📊 Score: <b>${signal.score.toFixed(0)}/100</b> | Confidence: <b>${signal.confidence ?? "High"}</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `💰 Entry: <code>${signal.entryPrice.toFixed(6)}</code>\n` +
+      `🛑 SL:    <code>${signal.stopLoss.toFixed(6)}</code>\n` +
+      `🎯 TP1:   <code>${signal.tp1.toFixed(6)}</code>\n` +
+      `🎯 TP2:   <code>${signal.tp2.toFixed(6)}</code>\n` +
+      `🎯 TP3:   <code>${signal.tp3.toFixed(6)}</code>\n` +
+      `⚖️ RR:    <b>${signal.rrRatio ? signal.rrRatio.toFixed(2) + ":1" : "N/A"}</b>\n` +
+      (signal.timeframeAlignment ? `📈 MTF:   ${signal.timeframeAlignment}\n` : "") +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `💡 <i>${signal.whyNow ?? signal.reason}</i>`
     );
   },
 
@@ -84,6 +107,8 @@ export const Telegram = {
     tradeId: string;
     symbol: string;
     direction: string;
+    setupType?: string;
+    confidence?: string;
     entryPrice: number;
     stopLoss: number;
     tp1: number;
@@ -91,39 +116,68 @@ export const Telegram = {
     tp3: number;
     signalScore: number;
     reason: string;
+    rrRatio?: number;
   }) {
     const dir = trade.direction === "LONG" ? "🟢 LONG" : "🔴 SHORT";
+    const conf = confidenceEmoji(trade.confidence);
+    const setup = setupEmoji(trade.setupType);
+    const riskPct = Math.abs((trade.entryPrice - trade.stopLoss) / trade.entryPrice * 100).toFixed(2);
+
     await sendMessage(
-      `📂 <b>Trade Opened</b> [${trade.tradeId}]\n` +
+      `📂 <b>TRADE OPENED</b> [${trade.tradeId}] ${conf}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
       `${dir} <b>${trade.symbol}</b>\n` +
-      `Score: <b>${trade.signalScore.toFixed(1)}</b>\n\n` +
-      `Entry: <code>${trade.entryPrice}</code>\n` +
-      `SL: <code>${trade.stopLoss}</code>\n` +
-      `TP1: <code>${trade.tp1}</code> | TP2: <code>${trade.tp2}</code> | TP3: <code>${trade.tp3}</code>\n\n` +
-      `<i>Reason: ${trade.reason}</i>`
+      `${setup} <b>${trade.setupType ?? "Setup"}</b> | Score: <b>${trade.signalScore.toFixed(0)}/100</b>\n` +
+      `Confidence: <b>${trade.confidence ?? "High"}</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `💰 Entry: <code>${trade.entryPrice.toFixed(6)}</code>\n` +
+      `🛑 SL:    <code>${trade.stopLoss.toFixed(6)}</code> (Risk: ${riskPct}%)\n` +
+      `🎯 TP1:   <code>${trade.tp1.toFixed(6)}</code>\n` +
+      `🎯 TP2:   <code>${trade.tp2.toFixed(6)}</code>\n` +
+      `🎯 TP3:   <code>${trade.tp3.toFixed(6)}</code>\n` +
+      (trade.rrRatio ? `⚖️ RR:    <b>${trade.rrRatio.toFixed(2)}:1</b>\n` : "") +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `💡 <i>${trade.reason}</i>`
     );
   },
 
   async tp1Hit(tradeId: string, symbol: string, price: number) {
-    await sendMessage(`✅ <b>TP1 Hit</b> [${tradeId}]\n<b>${symbol}</b> reached TP1 at <code>${price}</code>\nSL moved to break-even. Trailing remaining position.`);
+    await sendMessage(
+      `✅ <b>TP1 HIT</b> [${tradeId}]\n` +
+      `<b>${symbol}</b> reached TP1 at <code>${price.toFixed(6)}</code>\n` +
+      `📌 SL moved to break-even. Trailing remaining position.`
+    );
   },
 
   async tp2Hit(tradeId: string, symbol: string, price: number) {
-    await sendMessage(`✅✅ <b>TP2 Hit</b> [${tradeId}]\n<b>${symbol}</b> reached TP2 at <code>${price}</code>\nContinuing to trail to TP3.`);
+    await sendMessage(
+      `✅✅ <b>TP2 HIT</b> [${tradeId}]\n` +
+      `<b>${symbol}</b> reached TP2 at <code>${price.toFixed(6)}</code>\n` +
+      `📌 SL trailed to TP1. Riding to TP3.`
+    );
   },
 
   async tp3Hit(tradeId: string, symbol: string, price: number) {
-    await sendMessage(`✅✅✅ <b>TP3 Hit!</b> [${tradeId}]\n<b>${symbol}</b> reached full target TP3 at <code>${price}</code>\n🎉 Full trade target achieved!`);
+    await sendMessage(
+      `🏆 <b>TP3 HIT — FULL TARGET!</b> [${tradeId}]\n` +
+      `<b>${symbol}</b> reached TP3 at <code>${price.toFixed(6)}</code>\n` +
+      `🎉 All targets achieved. Excellent trade!`
+    );
   },
 
   async slHit(tradeId: string, symbol: string, price: number) {
-    await sendMessage(`🛑 <b>SL Hit</b> [${tradeId}]\n<b>${symbol}</b> stopped out at <code>${price}</code>\nReviewing setup for learning.`);
+    await sendMessage(
+      `🛑 <b>STOP LOSS HIT</b> [${tradeId}]\n` +
+      `<b>${symbol}</b> stopped out at <code>${price.toFixed(6)}</code>\n` +
+      `🧠 Learning engine reviewing setup now.`
+    );
   },
 
   async tradeClosed(trade: {
     tradeId: string;
     symbol: string;
     direction: string;
+    setupType?: string;
     entryPrice: number;
     exitPrice: number;
     pnl: number;
@@ -134,15 +188,38 @@ export const Telegram = {
   }) {
     const emoji = trade.result === "WIN" ? "🏆" : trade.result === "LOSS" ? "💔" : "➖";
     const pnlStr = trade.pnl >= 0 ? `+${trade.pnl.toFixed(4)}` : trade.pnl.toFixed(4);
+    const pnlPctStr = trade.pnlPercent >= 0 ? `+${trade.pnlPercent.toFixed(2)}%` : `${trade.pnlPercent.toFixed(2)}%`;
     const hours = Math.floor(trade.holdingDurationMinutes / 60);
     const mins = trade.holdingDurationMinutes % 60;
+    const durStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+
     await sendMessage(
-      `${emoji} <b>Trade Closed</b> [${trade.tradeId}] — ${trade.result}\n` +
-      `<b>${trade.symbol}</b> ${trade.direction}\n` +
-      `Entry: <code>${trade.entryPrice}</code> → Exit: <code>${trade.exitPrice}</code>\n` +
-      `PnL: <code>${pnlStr} USDT (${trade.pnlPercent.toFixed(2)}%)</code>\n` +
-      `Duration: ${hours > 0 ? `${hours}h ` : ""}${mins}m\n` +
-      `Exit: ${trade.exitReason}`
+      `${emoji} <b>TRADE CLOSED — ${trade.result}</b> [${trade.tradeId}]\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `<b>${trade.symbol}</b> ${trade.direction} | ${trade.setupType ?? ""}\n` +
+      `📥 Entry: <code>${trade.entryPrice.toFixed(6)}</code>\n` +
+      `📤 Exit:  <code>${trade.exitPrice.toFixed(6)}</code>\n` +
+      `💰 PnL:   <code>${pnlStr} USDT (${pnlPctStr})</code>\n` +
+      `⏱️ Time:  ${durStr}\n` +
+      `📌 Exit:  ${trade.exitReason}`
+    );
+  },
+
+  async watchlistAdded(symbol: string, direction: string, score: number, setupType: string) {
+    await sendMessage(
+      `👁️ <b>WATCHLIST</b> — Near-Miss Signal\n` +
+      `<b>${symbol}</b> ${direction} | Score: <b>${score}/100</b>\n` +
+      `Setup: ${setupType}\n` +
+      `<i>Monitoring — will alert if setup improves to ≥90</i>`
+    );
+  },
+
+  async riskPause(reason: string, durationMinutes: number) {
+    await sendMessage(
+      `⚠️ <b>RISK MANAGER — Trading Paused</b>\n` +
+      `Reason: ${reason}\n` +
+      `Duration: ${durationMinutes} minutes\n` +
+      `<i>No new trades will be opened during this period.</i>`
     );
   },
 
@@ -157,9 +234,10 @@ export const Telegram = {
   }) {
     const pnlStr = report.pnl >= 0 ? `+${report.pnl.toFixed(4)}` : report.pnl.toFixed(4);
     await sendMessage(
-      `📊 <b>Daily Report — ${report.date}</b>\n\n` +
+      `📊 <b>Daily Report — ${report.date}</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
       `Trades: ${report.totalTrades} | Wins: ${report.wins} | Losses: ${report.losses}\n` +
-      `Win Rate: ${(report.winRate * 100).toFixed(1)}%\n` +
+      `Win Rate: <b>${(report.winRate * 100).toFixed(1)}%</b>\n` +
       `Net PnL: <code>${pnlStr} USDT</code>\n\n` +
       `<i>${report.summary}</i>`
     );
@@ -177,9 +255,10 @@ export const Telegram = {
   }) {
     const pnlStr = report.pnl >= 0 ? `+${report.pnl.toFixed(4)}` : report.pnl.toFixed(4);
     await sendMessage(
-      `📅 <b>Weekly Report</b>\n${report.weekStart} → ${report.weekEnd}\n\n` +
+      `📅 <b>Weekly Report</b>\n${report.weekStart} → ${report.weekEnd}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
       `Trades: ${report.totalTrades} | Wins: ${report.wins} | Losses: ${report.losses}\n` +
-      `Win Rate: ${(report.winRate * 100).toFixed(1)}%\n` +
+      `Win Rate: <b>${(report.winRate * 100).toFixed(1)}%</b>\n` +
       `Net PnL: <code>${pnlStr} USDT</code>\n\n` +
       `<i>${report.summary}</i>`
     );
@@ -195,11 +274,12 @@ export const Telegram = {
     const worst = insights.worstSetups.slice(0, 3).join(", ") || "None yet";
     const notes = insights.improvementNotes.slice(0, 2).join("\n• ") || "No notes yet";
     await sendMessage(
-      `🧠 <b>Learning Report</b>\n\n` +
-      `Reviews analyzed: ${insights.totalReviews}\n` +
+      `🧠 <b>AI Learning Report</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `Reviews: ${insights.totalReviews}\n` +
       `Best setups: ${best}\n` +
-      `Avoid: ${worst}\n\n` +
-      `Improvement notes:\n• ${notes}`
+      `Watch out: ${worst}\n\n` +
+      `Notes:\n• ${notes}`
     );
   },
 };

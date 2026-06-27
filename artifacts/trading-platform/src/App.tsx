@@ -5,7 +5,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/layout/layout";
 import { useEffect } from "react";
 
-// Pages
 import Dashboard from "@/pages/dashboard";
 import Scanner from "@/pages/scanner";
 import Gainers from "@/pages/gainers";
@@ -16,14 +15,16 @@ import TradeJournal from "@/pages/trade-journal";
 import Analytics from "@/pages/analytics";
 import LearningCenter from "@/pages/learning";
 import Reports from "@/pages/reports";
+import Watchlist from "@/pages/watchlist";
+import Admin from "@/pages/admin";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
 
 function ForceDark() {
   useEffect(() => {
-    document.documentElement.classList.add('dark');
-    document.documentElement.style.colorScheme = 'dark';
+    document.documentElement.classList.add("dark");
+    document.documentElement.style.colorScheme = "dark";
   }, []);
   return null;
 }
@@ -42,6 +43,8 @@ function Router() {
         <Route path="/analytics" component={Analytics} />
         <Route path="/learning" component={LearningCenter} />
         <Route path="/reports" component={Reports} />
+        <Route path="/watchlist" component={Watchlist} />
+        <Route path="/admin" component={Admin} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

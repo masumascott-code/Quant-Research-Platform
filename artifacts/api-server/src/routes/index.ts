@@ -7,6 +7,8 @@ import analyticsRouter from "./analytics";
 import learningRouter from "./learning";
 import reportsRouter from "./reports";
 import liveRouter from "./live";
+import watchlistRouter from "./watchlist";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
@@ -18,5 +20,7 @@ router.use("/analytics", analyticsRouter);
 router.use("/learning", learningRouter);
 router.use("/reports", reportsRouter);
 router.use("/live", liveRouter);
+router.use("/watchlist", watchlistRouter);
+router.use("/admin", adminRouter);
 
 export default router;
