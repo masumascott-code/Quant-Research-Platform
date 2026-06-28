@@ -1,0 +1,43 @@
+groups:
+  - name: quantedge-production
+    rules:
+      - alert: QuantedgeApiDown
+        expr: up{job="quantedge-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: QUANTEDGE API is down
+          description: Prometheus cannot scrape the API metrics endpoint.
+
+      - alert: QuantedgeHighErrorRate
+        expr: sum(rate(quantedge_http_requests_total{status_code=~"5.."}[5m])) / clamp_min(sum(rate(quantedge_http_requests_total[5m])), 1) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: QUANTEDGE API 5xx rate is above 1%
+
+      - alert: QuantedgeHighLatency
+        expr: histogram_quantile(0.95, sum(rate(quantedge_http_request_duration_seconds_bucket[5m])) by (le)) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: QUANTEDGE API p95 latency is above 2 seconds
+
+      - alert: QuantedgeScannerStopped
+        expr: quantedge_scanner_running == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: QUANTEDGE scanner is not running
+
+      - alert: QuantedgeQueueFailures
+        expr: sum(rate(quantedge_queue_jobs_total{status="failed"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: QUANTEDGE queue jobs are failing

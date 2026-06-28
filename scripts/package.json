@@ -5,7 +5,16 @@
   "type": "module",
   "scripts": {
     "hello": "tsx ./src/hello.ts",
+    "seed:production": "tsx ./src/seed-production.ts",
+    "load-test": "tsx ./src/load-test.ts",
+    "stress-test": "tsx ./src/stress-test.ts",
+    "memory-leak-test": "tsx ./src/memory-leak-test.ts",
+    "api-benchmark": "tsx ./src/api-benchmark.ts",
+    "scanner-benchmark": "tsx ./src/scanner-benchmark.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@workspace/db": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -11,6 +11,7 @@ import reportsRouter from "./reports";
 import liveRouter from "./live";
 import watchlistRouter from "./watchlist";
 import adminRouter from "./admin";
+import aiRouter from "./ai";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use("/reports", reportsRouter);
 router.use("/live", liveRouter);
 router.use("/watchlist", watchlistRouter);
 router.use("/admin", adminRouter);
+router.use("/ai", aiRouter);
 
 export default router;

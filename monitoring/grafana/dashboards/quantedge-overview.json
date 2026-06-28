@@ -1,0 +1,87 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        {
+          "expr": "sum(rate(quantedge_http_requests_total[5m])) by (route)",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Request Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quantedge_http_request_duration_seconds_bucket[5m])) by (le, route))",
+          "legendFormat": "p95 {{route}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Request Latency p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 8 },
+      "id": 3,
+      "targets": [
+        { "expr": "quantedge_scanner_running", "legendFormat": "scanner", "refId": "A" }
+      ],
+      "title": "Scanner Running",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 8 },
+      "id": 4,
+      "targets": [
+        { "expr": "sum(rate(quantedge_queue_jobs_total[5m])) by (queue, status)", "legendFormat": "{{queue}} {{status}}", "refId": "A" }
+      ],
+      "title": "Queue Throughput",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 8 },
+      "id": 5,
+      "targets": [
+        { "expr": "sum(rate(quantedge_ai_requests_total[5m])) by (template, status)", "legendFormat": "{{template}} {{status}}", "refId": "A" }
+      ],
+      "title": "AI Advisory Requests",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 40,
+  "tags": ["quantedge", "production"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "QUANTEDGE AI Overview",
+  "uid": "quantedge-overview",
+  "version": 1,
+  "weekStart": ""
+}

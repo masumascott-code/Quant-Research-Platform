@@ -8,6 +8,10 @@ import { rateLimit } from "./middleware/security";
 import { ScannerService } from "./services/scanner";
 import { PriceTracker } from "./services/price-tracker";
 import { SlMonitor } from "./services/sl-monitor";
+import { metricsMiddleware } from "./infra/metrics";
+import { requestContextMiddleware } from "./infra/request-context";
+import { scheduler } from "./infra/scheduler";
+import { boolEnv } from "./infra/env";
 
 const app: Express = express();
 
@@ -36,12 +40,16 @@ const corsOptions: CorsOptions = {
 app.use(
   pinoHttp({
     logger,
+    genReqId(req) {
+      return req.headers["x-request-id"]?.toString() || req.id;
+    },
     serializers: {
       req(req) {
         return {
           id: req.id,
           method: req.method,
           url: req.url?.split("?")[0],
+          correlationId: req.headers["x-correlation-id"],
         };
       },
       res(res) {
@@ -52,11 +60,15 @@ app.use(
     },
   }),
 );
+app.use(requestContextMiddleware);
+app.use(metricsMiddleware);
 app.use(cors(corsOptions));
 app.use((_req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "no-referrer");
   res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   next();
 });
 app.use(rateLimit(securityConfig.rateLimitMax));
@@ -65,18 +77,24 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
-// Auto-start scanner and price tracker when server boots (non-blocking)
-setTimeout(() => {
-  const scanner = ScannerService.getInstance();
-  scanner.start().catch(err => logger.error({ err }, "Failed to auto-start scanner"));
-
-  const tracker = PriceTracker.getInstance();
-  tracker.start().catch(err => logger.error({ err }, "Failed to start price tracker"));
-
-  // Start SL/TP monitor after price tracker has had time to fetch initial prices
+if (boolEnv("RUN_BACKGROUND_SERVICES", true)) {
+  // Auto-start scanner and price tracker when server boots (non-blocking)
   setTimeout(() => {
-    SlMonitor.getInstance().start();
-  }, 5_000);
-}, 3000);
+    const scanner = ScannerService.getInstance();
+    scanner.start().catch(err => logger.error({ err }, "Failed to auto-start scanner"));
+
+    const tracker = PriceTracker.getInstance();
+    tracker.start().catch(err => logger.error({ err }, "Failed to start price tracker"));
+
+    // Start SL/TP monitor after price tracker has had time to fetch initial prices
+    setTimeout(() => {
+      SlMonitor.getInstance().start();
+    }, 5_000);
+  }, 3000);
+}
+
+if (boolEnv("SCHEDULER_IN_API_PROCESS", false)) {
+  scheduler.start();
+}
 
 export default app;

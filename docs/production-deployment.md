@@ -1,0 +1,100 @@
+# QUANTEDGE AI Production Deployment Guide
+
+## Architecture Diagram
+
+```text
+Browser
+  -> Nginx web container
+  -> API container /api
+       -> PostgreSQL
+       -> Redis
+       -> Prometheus /api/metrics
+  -> Worker container
+       -> BullMQ queues in Redis
+       -> PostgreSQL
+  -> Scheduler container
+       -> enqueues recurring jobs
+
+Prometheus -> API metrics
+Grafana -> Prometheus dashboards
+```
+
+## Deployment Diagram
+
+```text
+docker compose
+  postgres      persistent volume: postgres_data
+  redis         persistent volume: redis_data
+  api           health: /api/readyz
+  worker        queues: reports, maintenance, scanner
+  scheduler     daily/weekly/cleanup jobs
+  web           Nginx static frontend + /api proxy
+  prometheus    scrape /api/metrics
+  grafana       dashboard provisioning
+```
+
+## Infrastructure Diagram
+
+```text
+Logs: stdout JSON -> Docker json-file rotation
+Metrics: prom-client -> /api/metrics -> Prometheus -> Grafana
+Queues: BullMQ -> Redis -> Worker -> retry/dead-letter
+Database: Drizzle schema push -> PostgreSQL -> pg_dump backups
+Secrets: .env.production or platform secret manager
+```
+
+## First Deploy
+
+1. Copy `.env.production.example` to `.env.production`.
+2. Replace all placeholder passwords and secrets.
+3. Run `docker compose build`.
+4. Run `docker compose run --rm api pnpm --filter @workspace/db run push`.
+5. Run `docker compose up -d`.
+6. Check `http://localhost:8080/api/readyz`.
+7. Open Grafana at `http://localhost:3000`.
+
+## Migration Workflow
+
+Use the project Drizzle workflow before bringing up new app containers:
+
+```powershell
+$env:DATABASE_URL="postgresql://..."
+pnpm run db:migrate:production
+```
+
+In Docker:
+
+```bash
+docker compose run --rm api pnpm --filter @workspace/db run push
+```
+
+## Backup
+
+```powershell
+$env:DATABASE_URL="postgresql://..."
+pnpm run db:backup
+```
+
+Backups are written to `backups/quantedge-<timestamp>.dump`.
+
+## Restore
+
+```powershell
+$env:DATABASE_URL="postgresql://..."
+pnpm run db:restore -- backups/quantedge-YYYYMMDD-HHMMSS.dump
+```
+
+## Rollback Guide
+
+1. Keep the previous image tag before deploying a new version.
+2. If health checks fail, stop the new containers:
+   `docker compose down`
+3. Restore the previous image tag in Compose or your registry deploy config.
+4. Start the previous version:
+   `docker compose up -d`
+5. Restore DB only if the rollback requires schema/data reversal.
+6. Validate `/api/readyz`, `/api/healthz`, and Grafana request/error panels.
+
+## Production Safety
+
+The worker and scheduler only enqueue or process infrastructure/reporting jobs. The adaptive learning engine writes recommendations requiring human approval and does not modify config automatically.

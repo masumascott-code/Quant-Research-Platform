@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: QUANTEDGE AI
+    orgId: 1
+    folder: QUANTEDGE AI
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

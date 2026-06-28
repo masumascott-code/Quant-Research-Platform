@@ -31,3 +31,7 @@ export * from "./backtest_trades";
 export * from "./experiments";
 export * from "./performance_metrics";
 export * from "./walk_forward_results";
+export * from "./adaptive_learning";
+export * from "./recommendations";
+export * from "./learning_history";
+export * from "./edge_scores";

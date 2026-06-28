@@ -1,5 +1,9 @@
 import app from "./app";
+import { installGracefulShutdown } from "./infra/graceful-shutdown";
+import { validateProductionEnvironment } from "./infra/env";
 import { logger } from "./lib/logger";
+
+validateProductionEnvironment();
 
 const rawPort = process.env["PORT"];
 
@@ -15,7 +19,7 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
+const server = app.listen(port, (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
@@ -23,3 +27,5 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
 });
+
+installGracefulShutdown(server);

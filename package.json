@@ -9,6 +9,12 @@
     "dev:api": "powershell -ExecutionPolicy Bypass -File scripts/start-api.ps1",
     "dev:web": "powershell -Command \"$env:PORT='21210'; $env:BASE_PATH='/'; $env:API_PROXY_TARGET='http://127.0.0.1:8080'; pnpm --filter @workspace/trading-platform run dev\"",
     "db:push": "powershell -ExecutionPolicy Bypass -File scripts/push-schema.ps1",
+    "db:migrate:production": "powershell -ExecutionPolicy Bypass -File scripts/migrate-production.ps1",
+    "db:backup": "powershell -ExecutionPolicy Bypass -File scripts/backup-db.ps1",
+    "db:restore": "powershell -ExecutionPolicy Bypass -File scripts/restore-db.ps1",
+    "lint": "prettier --check \"artifacts/api-server/src/infra/**/*.ts\" \"artifacts/api-server/src/worker.ts\" \"artifacts/api-server/src/scheduler.ts\" \"scripts/src/*.ts\" \"docs/*.md\" \"monitoring/**/*.yml\" \".github/workflows/*.yml\" \"docker-compose.yml\" \"*.json\"",
+    "test": "pnpm --filter @workspace/scripts run typecheck && pnpm run typecheck",
+    "docker:build": "docker build -f Dockerfile.api -t quantedge-api:local . && docker build -f Dockerfile.web -t quantedge-web:local .",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"

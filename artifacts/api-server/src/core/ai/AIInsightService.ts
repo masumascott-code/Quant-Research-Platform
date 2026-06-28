@@ -3,6 +3,7 @@ import { ContextBuilder } from "./ContextBuilder";
 import { GeminiProvider } from "./GeminiProvider";
 import { PromptBuilder } from "./PromptBuilder";
 import { ResponseParser } from "./ResponseParser";
+import { aiRequestsTotal } from "../../infra/metrics";
 import type { AIContext, AIProvider, AIPromptTemplate, ParsedAIInsight } from "./types";
 
 export class AIInsightService {
@@ -22,15 +23,21 @@ export class AIInsightService {
     const config = (await configService.get()).ai;
     const context = params.context ?? await this.contextBuilder.buildPlatformContext({ symbol: params.symbol });
     const messages = this.promptBuilder.build(params.template, context, params.instruction);
-    const response = await this.provider.generate({
-      template: params.template,
-      messages,
-      cacheKey: params.context
-        ? undefined
-        : `${params.template}:${params.symbol ?? "platform"}:${JSON.stringify(context)}`,
-      metadata: { advisoryOnly: true },
-    }, config);
-    return this.parser.parseInsight(response.text);
+    try {
+      const response = await this.provider.generate({
+        template: params.template,
+        messages,
+        cacheKey: params.context
+          ? undefined
+          : `${params.template}:${params.symbol ?? "platform"}:${JSON.stringify(context)}`,
+        metadata: { advisoryOnly: true },
+      }, config);
+      aiRequestsTotal.inc({ template: params.template, status: "success" });
+      return this.parser.parseInsight(response.text);
+    } catch (err) {
+      aiRequestsTotal.inc({ template: params.template, status: "error" });
+      throw err;
+    }
   }
 }
 
