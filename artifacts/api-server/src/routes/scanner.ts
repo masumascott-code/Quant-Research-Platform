@@ -65,45 +65,21 @@ router.post("/stop", async (req, res) => {
 
 router.get("/gainers", async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 20, 100);
-
-  const latestScan = await db.select({ maxId: sql<number>`max(id)` }).from(marketSnapshotsTable).where(eq(marketSnapshotsTable.listType, "gainer"));
-
-  if (!latestScan[0]?.maxId) {
-    res.json([]);
-    return;
-  }
-
-  const latestScannedAt = await db
-    .select({ scannedAt: marketSnapshotsTable.scannedAt })
-    .from(marketSnapshotsTable)
-    .where(eq(marketSnapshotsTable.id, latestScan[0].maxId));
-
-  if (!latestScannedAt[0]) {
-    res.json([]);
-    return;
-  }
-
-  const scanTime = latestScannedAt[0].scannedAt;
-  const from = new Date(scanTime.getTime() - configService.getSync().scanner.snapshotFreshnessWindowMs);
-
-  const gainers = await db
-    .select()
-    .from(marketSnapshotsTable)
-    .where(and(eq(marketSnapshotsTable.listType, "gainer"), gte(marketSnapshotsTable.scannedAt, from)))
-    .orderBy(desc(marketSnapshotsTable.priceChangePercent))
-    .limit(limit);
-
+  const gainers = await getLatestUniqueSnapshots("gainer", limit);
   res.json(gainers.map(formatSnapshot));
 });
 
 router.get("/losers", async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 20, 100);
+  const losers = await getLatestUniqueSnapshots("loser", limit);
+  res.json(losers.map(formatSnapshot));
+});
 
-  const latestScan = await db.select({ maxId: sql<number>`max(id)` }).from(marketSnapshotsTable).where(eq(marketSnapshotsTable.listType, "loser"));
+async function getLatestUniqueSnapshots(listType: "gainer" | "loser", limit: number) {
+  const latestScan = await db.select({ maxId: sql<number>`max(id)` }).from(marketSnapshotsTable).where(eq(marketSnapshotsTable.listType, listType));
 
   if (!latestScan[0]?.maxId) {
-    res.json([]);
-    return;
+    return [];
   }
 
   const latestScannedAt = await db
@@ -112,22 +88,33 @@ router.get("/losers", async (req, res) => {
     .where(eq(marketSnapshotsTable.id, latestScan[0].maxId));
 
   if (!latestScannedAt[0]) {
-    res.json([]);
-    return;
+    return [];
   }
 
   const scanTime = latestScannedAt[0].scannedAt;
   const from = new Date(scanTime.getTime() - configService.getSync().scanner.snapshotFreshnessWindowMs);
 
-  const losers = await db
+  const candidates = await db
     .select()
     .from(marketSnapshotsTable)
-    .where(and(eq(marketSnapshotsTable.listType, "loser"), gte(marketSnapshotsTable.scannedAt, from)))
-    .orderBy(sql`${marketSnapshotsTable.priceChangePercent} ASC`)
-    .limit(limit);
+    .where(and(eq(marketSnapshotsTable.listType, listType), gte(marketSnapshotsTable.scannedAt, from)))
+    .orderBy(desc(marketSnapshotsTable.scannedAt))
+    .limit(Math.max(limit * 20, 200));
 
-  res.json(losers.map(formatSnapshot));
-});
+  const latestBySymbol = new Map<string, (typeof candidates)[number]>();
+  for (const snapshot of candidates) {
+    if (!latestBySymbol.has(snapshot.symbol)) {
+      latestBySymbol.set(snapshot.symbol, snapshot);
+    }
+  }
+
+  return Array.from(latestBySymbol.values())
+    .sort((a, b) => {
+      const direction = listType === "gainer" ? -1 : 1;
+      return direction * (Number(a.priceChangePercent) - Number(b.priceChangePercent));
+    })
+    .slice(0, limit);
+}
 
 router.get("/coins", async (req, res) => {
   const coins = await db.select().from(coinsTable).where(eq(coinsTable.isActive, true)).orderBy(coinsTable.symbol);
