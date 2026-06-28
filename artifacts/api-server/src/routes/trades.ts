@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { paperTradesTable } from "@workspace/db";
 import { eq, desc, and } from "drizzle-orm";
-import { configService } from "../core/config";
+import { tradeService, TradeServiceError } from "../core/trading";
 
 const router = Router();
 
@@ -76,60 +76,24 @@ router.post("/:id/close", async (req, res) => {
     return;
   }
 
-  const [trade] = await db.select().from(paperTradesTable).where(eq(paperTradesTable.id, id));
-  if (!trade) {
-    res.status(404).json({ error: "Trade not found" });
-    return;
+  try {
+    const updated = await tradeService.closeTradeById(id, {
+      exitPrice: parsed.exitPrice,
+      exitReason: parsed.exitReason,
+      trigger: "MANUAL",
+    });
+    res.json(formatTrade(updated));
+  } catch (err) {
+    if (err instanceof TradeServiceError && err.code === "NOT_FOUND") {
+      res.status(404).json({ error: "Trade not found" });
+      return;
+    }
+    if (err instanceof TradeServiceError && err.code === "ALREADY_CLOSED") {
+      res.status(400).json({ error: "Trade already closed" });
+      return;
+    }
+    throw err;
   }
-  if (trade.status === "closed") {
-    res.status(400).json({ error: "Trade already closed" });
-    return;
-  }
-
-  const { exitPrice, exitReason } = parsed;
-  const entryPrice = Number(trade.entryPrice);
-  const quantity = Number(trade.quantity);
-
-  let pnl: number;
-  if (trade.direction === "LONG") {
-    pnl = (exitPrice - entryPrice) * quantity;
-  } else {
-    pnl = (entryPrice - exitPrice) * quantity;
-  }
-
-  const pnlPercent = (pnl / (entryPrice * quantity)) * 100;
-  const stopLoss = Number(trade.stopLoss);
-  const risk = Math.abs(entryPrice - stopLoss);
-
-  let result: string;
-  if (Math.abs(pnl) < configService.getSync().paperTrading.breakEvenPnlThreshold) {
-    result = "BREAKEVEN";
-  } else if (pnl > 0) {
-    result = "WIN";
-  } else {
-    result = "LOSS";
-  }
-
-  const now = new Date();
-  const openedAt = new Date(trade.openedAt);
-  const holdingDurationMinutes = Math.round((now.getTime() - openedAt.getTime()) / 60000);
-
-  const [updated] = await db
-    .update(paperTradesTable)
-    .set({
-      status: "closed",
-      result,
-      exitPrice: String(exitPrice),
-      exitReason,
-      pnl: String(pnl),
-      pnlPercent: String(pnlPercent),
-      holdingDurationMinutes,
-      closedAt: now,
-    })
-    .where(eq(paperTradesTable.id, id))
-    .returning();
-
-  res.json(formatTrade(updated));
 });
 
 function formatTrade(t: any) {

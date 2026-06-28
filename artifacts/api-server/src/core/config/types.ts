@@ -81,10 +81,15 @@ export interface RiskRuntimeConfig {
   maxConsecutiveLosses: number;
   pauseAfterLossesMinutes: number;
   dailyDrawdownLimitPercent: number;
+  maxDrawdownPercent: number;
   emergencyPauseMinutes: number;
   manualPauseDefaultMinutes: number;
   recentLossLookback: number;
   maxExposurePercent: number;
+  maxPortfolioRiskPercent: number;
+  maxAccountRiskPercent: number;
+  maxSectorExposurePercent: number;
+  maxCoinExposurePercent: number;
   killSwitch: boolean;
 }
 

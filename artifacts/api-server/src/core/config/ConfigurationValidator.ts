@@ -78,10 +78,15 @@ type ConfigPath =
   | "risk.maxConsecutiveLosses"
   | "risk.pauseAfterLossesMinutes"
   | "risk.dailyDrawdownLimitPercent"
+  | "risk.maxDrawdownPercent"
   | "risk.emergencyPauseMinutes"
   | "risk.manualPauseDefaultMinutes"
   | "risk.recentLossLookback"
   | "risk.maxExposurePercent"
+  | "risk.maxPortfolioRiskPercent"
+  | "risk.maxAccountRiskPercent"
+  | "risk.maxSectorExposurePercent"
+  | "risk.maxCoinExposurePercent"
   | "risk.killSwitch"
   | "paperTrading.defaultEquity"
   | "paperTrading.defaultLeverage"
@@ -175,10 +180,15 @@ const CONFIG_VALUE_KINDS: Record<ConfigPath, ValueKind> = {
   "risk.maxConsecutiveLosses": "number",
   "risk.pauseAfterLossesMinutes": "number",
   "risk.dailyDrawdownLimitPercent": "number",
+  "risk.maxDrawdownPercent": "number",
   "risk.emergencyPauseMinutes": "number",
   "risk.manualPauseDefaultMinutes": "number",
   "risk.recentLossLookback": "number",
   "risk.maxExposurePercent": "number",
+  "risk.maxPortfolioRiskPercent": "number",
+  "risk.maxAccountRiskPercent": "number",
+  "risk.maxSectorExposurePercent": "number",
+  "risk.maxCoinExposurePercent": "number",
   "risk.killSwitch": "boolean",
   "paperTrading.defaultEquity": "number",
   "paperTrading.defaultLeverage": "number",
@@ -205,7 +215,13 @@ export const LEGACY_CONFIG_ALIASES: Record<string, ConfigPath> = {
   max_daily_trades: "scanner.maxDailyTrades",
   max_consecutive_losses: "risk.maxConsecutiveLosses",
   max_daily_loss: "risk.dailyDrawdownLimitPercent",
+  max_daily_drawdown: "risk.dailyDrawdownLimitPercent",
+  max_drawdown: "risk.maxDrawdownPercent",
   max_exposure: "risk.maxExposurePercent",
+  max_portfolio_risk: "risk.maxPortfolioRiskPercent",
+  max_account_risk: "risk.maxAccountRiskPercent",
+  max_sector_exposure: "risk.maxSectorExposurePercent",
+  max_coin_exposure: "risk.maxCoinExposurePercent",
   rr_ratio: "signal.minRrRatio",
   kill_switch: "risk.killSwitch",
   emergency_stop: "risk.killSwitch",

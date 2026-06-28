@@ -9,6 +9,7 @@ import {
 import { eq, and, count, gte, desc, lt } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { configService, type RuntimeConfig, type ScannerRuntimeConfig } from "../core/config";
+import { tradeService } from "../core/trading";
 import { analyzeForLong, analyzeForShort, CandleData } from "./signal-engine";
 import { Telegram } from "./telegram";
 import { riskManager } from "./risk-manager";
@@ -263,34 +264,7 @@ export class ScannerService {
   }
 
   private async openPaperTrade(signal: any, analysis: any) {
-    const { defaultQuantity } = configService.getSync().paperTrading;
-    const tradeId = `PT-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-
-    const [trade] = await db.insert(paperTradesTable).values({
-      tradeId, signalId: signal.id, symbol: signal.symbol,
-      direction: signal.direction,
-      setupType: analysis.setupType, confidence: analysis.confidence,
-      entryPrice: String(analysis.entryPrice), stopLoss: String(analysis.stopLoss),
-      currentSl: String(analysis.stopLoss),
-      tp1: String(analysis.tp1), tp2: String(analysis.tp2), tp3: String(analysis.tp3),
-      quantity: String(defaultQuantity), signalScore: String(analysis.score), signalGrade: analysis.grade,
-      reason: analysis.reason, slReason: analysis.slReason, status: "open",
-    }).returning();
-
-    await db.update(signalsTable).set({ status: "traded" }).where(eq(signalsTable.id, signal.id));
-
-    await riskManager.recordTradeOpened();
-
-    await Telegram.tradeOpened({
-      tradeId, symbol: signal.symbol, direction: signal.direction,
-      setupType: analysis.setupType, confidence: analysis.confidence,
-      entryPrice: analysis.entryPrice, stopLoss: analysis.stopLoss,
-      tp1: analysis.tp1, tp2: analysis.tp2, tp3: analysis.tp3,
-      signalScore: analysis.score, reason: analysis.reason, rrRatio: analysis.rrRatio,
-    });
-
-    logger.info({ tradeId, symbol: signal.symbol, direction: signal.direction, setupType: analysis.setupType }, "Paper trade opened");
-    return trade;
+    return await tradeService.openPaperTrade(signal, analysis);
   }
 
   private async addToWatchlist(symbol: string, analysis: any) {
@@ -394,10 +368,6 @@ export class ScannerService {
     return true;
   }
 
-  // After a trade closes — update risk manager
-  async onTradeClosed(result: string) {
-    await riskManager.recordTradeClosed(result);
-  }
 }
 
 function sleep(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)); }
