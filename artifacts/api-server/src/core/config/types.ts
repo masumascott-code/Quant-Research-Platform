@@ -97,8 +97,12 @@ export interface PaperTradingRuntimeConfig {
   defaultEquity: number;
   defaultLeverage: number;
   tradingFeeRate: number;
+  makerFeeRate: number;
+  takerFeeRate: number;
+  commissionRate: number;
   slippageRate: number;
   fundingRate: number;
+  fundingIntervalHours: number;
   defaultQuantity: number;
   breakEvenPnlThreshold: number;
 }

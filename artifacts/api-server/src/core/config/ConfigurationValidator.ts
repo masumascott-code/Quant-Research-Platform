@@ -91,8 +91,12 @@ type ConfigPath =
   | "paperTrading.defaultEquity"
   | "paperTrading.defaultLeverage"
   | "paperTrading.tradingFeeRate"
+  | "paperTrading.makerFeeRate"
+  | "paperTrading.takerFeeRate"
+  | "paperTrading.commissionRate"
   | "paperTrading.slippageRate"
   | "paperTrading.fundingRate"
+  | "paperTrading.fundingIntervalHours"
   | "paperTrading.defaultQuantity"
   | "paperTrading.breakEvenPnlThreshold"
   | "priceTracker.binanceBaseUrl"
@@ -193,8 +197,12 @@ const CONFIG_VALUE_KINDS: Record<ConfigPath, ValueKind> = {
   "paperTrading.defaultEquity": "number",
   "paperTrading.defaultLeverage": "number",
   "paperTrading.tradingFeeRate": "number",
+  "paperTrading.makerFeeRate": "number",
+  "paperTrading.takerFeeRate": "number",
+  "paperTrading.commissionRate": "number",
   "paperTrading.slippageRate": "number",
   "paperTrading.fundingRate": "number",
+  "paperTrading.fundingIntervalHours": "number",
   "paperTrading.defaultQuantity": "number",
   "paperTrading.breakEvenPnlThreshold": "number",
   "priceTracker.binanceBaseUrl": "string",
@@ -228,8 +236,12 @@ export const LEGACY_CONFIG_ALIASES: Record<string, ConfigPath> = {
   default_equity: "paperTrading.defaultEquity",
   default_leverage: "paperTrading.defaultLeverage",
   trading_fees: "paperTrading.tradingFeeRate",
+  maker_fee: "paperTrading.makerFeeRate",
+  taker_fee: "paperTrading.takerFeeRate",
+  commission: "paperTrading.commissionRate",
   slippage: "paperTrading.slippageRate",
   funding: "paperTrading.fundingRate",
+  funding_interval_hours: "paperTrading.fundingIntervalHours",
 };
 
 function cloneDefaultConfig(): RuntimeConfig {

@@ -92,6 +92,10 @@ router.post("/:id/close", async (req, res) => {
       res.status(400).json({ error: "Trade already closed" });
       return;
     }
+    if (err instanceof TradeServiceError && err.code === "EXECUTION_REJECTED") {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     throw err;
   }
 });

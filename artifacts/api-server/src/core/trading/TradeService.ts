@@ -1,4 +1,5 @@
 import { logger } from "../../lib/logger";
+import { executionService } from "../execution";
 import { portfolioService } from "../portfolio";
 import { TradeEvents } from "./TradeEvents";
 import { TradeLifecycle, type CloseTrigger, type TradeAnalysisInput, type TradeResult, type TradeSignalInput } from "./TradeLifecycle";
@@ -26,33 +27,33 @@ export class TradeService {
 
   async openPaperTrade(signal: TradeSignalInput, analysis: TradeAnalysisInput): Promise<PaperTradeRecord | null> {
     const previousState = "PENDING";
-    const portfolioApproval = await portfolioService.validateTrade(signal, analysis);
-    if (!portfolioApproval.approved || !portfolioApproval.sizing) {
+    const execution = await executionService.executeEntryOrder({ signal, analysis });
+    if ("rejected" in execution) {
       const nextState = this.stateMachine.transition(previousState, "TradeRejected", "REJECTED");
-      const reason = portfolioApproval.reason ?? "Portfolio validation rejected trade";
       await this.events.emit({
         name: "TradeRejected",
         signal,
-        reason,
+        reason: execution.reason,
         previousState,
         nextState,
         transition: "TradeRejected",
         occurredAt: new Date(),
       });
-      logger.warn({ symbol: signal.symbol, direction: signal.direction, reason }, "Trade rejected by portfolio engine");
+      logger.warn({ symbol: signal.symbol, direction: signal.direction, reason: execution.reason }, "Trade rejected by execution service");
       return null;
     }
 
     const nextState = this.stateMachine.transition(previousState, "TradeOpened", "OPEN");
     const tradeId = this.generateTradeId();
-    const quantity = portfolioApproval.sizing.quantity;
+    const quantity = execution.order.filledQuantity;
+    const executedAnalysis = { ...analysis, entryPrice: execution.entryPrice };
 
     const trade = await this.repository.create(
-      this.lifecycle.buildOpenValues({ tradeId, signal, analysis, quantity })
+      this.lifecycle.buildOpenValues({ tradeId, signal, analysis: executedAnalysis, quantity })
     );
 
     await this.repository.markSignalTraded(signal.id);
-    await portfolioService.recordTradeOpened(trade, portfolioApproval.sizing);
+    await portfolioService.recordTradeOpened(trade, execution.portfolioApproval.sizing!);
     await this.events.emit({
       name: "TradeOpened",
       trade,
@@ -81,9 +82,22 @@ export class TradeService {
     }
 
     const previousState = this.stateMachine.derive(trade);
-    const close = this.lifecycle.calculateClose({
+    const closeExecution = await executionService.executeExitOrder({
       trade,
       exitPrice: request.exitPrice,
+      orderType: request.trigger === "STOP_LOSS"
+        ? "STOP_MARKET"
+        : request.trigger === "TP3"
+          ? "TAKE_PROFIT"
+          : "MARKET",
+    });
+    if ("rejected" in closeExecution) {
+      throw new TradeServiceError("EXECUTION_REJECTED", closeExecution.reason);
+    }
+
+    const close = this.lifecycle.calculateClose({
+      trade,
+      exitPrice: closeExecution.averageFillPrice,
       exitReason: request.exitReason,
       forceResult: request.forceResult,
     });
@@ -247,7 +261,7 @@ export class TradeService {
 
 export class TradeServiceError extends Error {
   constructor(
-    readonly code: "NOT_FOUND" | "ALREADY_CLOSED",
+    readonly code: "NOT_FOUND" | "ALREADY_CLOSED" | "EXECUTION_REJECTED",
     message: string
   ) {
     super(message);
