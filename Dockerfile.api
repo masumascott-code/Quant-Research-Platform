@@ -14,6 +14,7 @@ COPY lib/api-zod/package.json lib/api-zod/package.json
 COPY lib/api-client-react/package.json lib/api-client-react/package.json
 COPY lib/api-spec/package.json lib/api-spec/package.json
 COPY scripts/package.json scripts/package.json
+COPY scripts/ensure-pnpm.cjs scripts/ensure-pnpm.cjs
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
