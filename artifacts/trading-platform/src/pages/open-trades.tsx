@@ -99,7 +99,7 @@ function LiveTradeRow({ trade, livePrices }: { trade: any; livePrices: Record<st
   const [flash, setFlash] = useState<"up" | "down" | null>(null);
 
   useEffect(() => {
-    if (markPrice == null) return;
+    if (markPrice == null) return undefined;
     if (prevPriceRef.current != null && markPrice !== prevPriceRef.current) {
       setFlash(markPrice > prevPriceRef.current ? "up" : "down");
       const t = setTimeout(() => setFlash(null), 600);
@@ -107,6 +107,7 @@ function LiveTradeRow({ trade, livePrices }: { trade: any; livePrices: Record<st
       return () => clearTimeout(t);
     }
     prevPriceRef.current = markPrice;
+    return undefined;
   }, [markPrice]);
 
   const livePnl = markPrice != null ? calcPnl(trade, markPrice) : null;

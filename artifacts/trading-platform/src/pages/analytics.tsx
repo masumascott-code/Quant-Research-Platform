@@ -2,7 +2,7 @@ import { useGetAnalyticsDashboard, getGetAnalyticsDashboardQueryKey } from "@wor
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart2, TrendingUp, Target, DollarSign } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 
 export default function Analytics() {
   const { data: analytics, isLoading } = useGetAnalyticsDashboard({
@@ -63,7 +63,7 @@ export default function Analytics() {
                     <Bar dataKey="pnl" fill="#00C087" radius={[2, 2, 0, 0]} >
                       {
                         pnlData.map((entry, index) => (
-                          <cell key={`cell-${index}`} fill={entry.pnl >= 0 ? '#00C087' : '#FF4757'} />
+                          <Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? '#00C087' : '#FF4757'} />
                         ))
                       }
                     </Bar>

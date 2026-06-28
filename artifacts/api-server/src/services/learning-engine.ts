@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { tradeReviewsTable, setupStatisticsTable, paperTradesTable, dailyPerformanceTable } from "@workspace/db";
-import { eq, and, desc, count, avg, sql } from "drizzle-orm";
+import { eq, and, desc, count, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { Telegram } from "./telegram";
 
@@ -132,8 +132,6 @@ async function updateSetupStats(direction: string, result: string, pnl: number, 
 
 async function updateDailyPerformance(): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
-  const todayStart = new Date(today + "T00:00:00Z");
-  const todayEnd = new Date(today + "T23:59:59Z");
 
   const todayTrades = await db.select().from(paperTradesTable)
     .where(and(eq(paperTradesTable.status, "closed"), sql`closed_at::date = ${today}::date`));

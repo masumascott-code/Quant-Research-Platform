@@ -48,24 +48,42 @@ router.get("/open", async (req, res) => {
 
 router.get("/:id", async (req, res) => {
   const id = Number(req.params.id);
-  if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid ID" });
+    return;
+  }
 
   const [trade] = await db.select().from(paperTradesTable).where(eq(paperTradesTable.id, id));
-  if (!trade) return res.status(404).json({ error: "Trade not found" });
+  if (!trade) {
+    res.status(404).json({ error: "Trade not found" });
+    return;
+  }
 
   res.json(formatTrade(trade));
 });
 
 router.post("/:id/close", async (req, res) => {
   const id = Number(req.params.id);
-  if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid ID" });
+    return;
+  }
 
   const parsed = parseCloseBody(req.body);
-  if (!parsed) return res.status(400).json({ error: "Invalid body" });
+  if (!parsed) {
+    res.status(400).json({ error: "Invalid body" });
+    return;
+  }
 
   const [trade] = await db.select().from(paperTradesTable).where(eq(paperTradesTable.id, id));
-  if (!trade) return res.status(404).json({ error: "Trade not found" });
-  if (trade.status === "closed") return res.status(400).json({ error: "Trade already closed" });
+  if (!trade) {
+    res.status(404).json({ error: "Trade not found" });
+    return;
+  }
+  if (trade.status === "closed") {
+    res.status(400).json({ error: "Trade already closed" });
+    return;
+  }
 
   const { exitPrice, exitReason } = parsed;
   const entryPrice = Number(trade.entryPrice);

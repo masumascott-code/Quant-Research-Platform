@@ -5,7 +5,6 @@ import {
   marketSnapshotsTable,
   signalsTable,
   paperTradesTable,
-  dailyPerformanceTable,
 } from "@workspace/db";
 import { eq, desc, sql, and, gte, count, sum } from "drizzle-orm";
 import { ScannerService } from "../services/scanner";
@@ -66,16 +65,11 @@ router.post("/stop", async (req, res) => {
 router.get("/gainers", async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 20, 100);
 
-  const subq = db
-    .select({ maxId: sql<number>`max(id)` })
-    .from(marketSnapshotsTable)
-    .where(eq(marketSnapshotsTable.listType, "gainer"))
-    .as("subq");
-
   const latestScan = await db.select({ maxId: sql<number>`max(id)` }).from(marketSnapshotsTable).where(eq(marketSnapshotsTable.listType, "gainer"));
 
   if (!latestScan[0]?.maxId) {
-    return res.json([]);
+    res.json([]);
+    return;
   }
 
   const latestScannedAt = await db
@@ -83,7 +77,10 @@ router.get("/gainers", async (req, res) => {
     .from(marketSnapshotsTable)
     .where(eq(marketSnapshotsTable.id, latestScan[0].maxId));
 
-  if (!latestScannedAt[0]) return res.json([]);
+  if (!latestScannedAt[0]) {
+    res.json([]);
+    return;
+  }
 
   const scanTime = latestScannedAt[0].scannedAt;
   const from = new Date(scanTime.getTime() - 5 * 60 * 1000);
@@ -104,7 +101,8 @@ router.get("/losers", async (req, res) => {
   const latestScan = await db.select({ maxId: sql<number>`max(id)` }).from(marketSnapshotsTable).where(eq(marketSnapshotsTable.listType, "loser"));
 
   if (!latestScan[0]?.maxId) {
-    return res.json([]);
+    res.json([]);
+    return;
   }
 
   const latestScannedAt = await db
@@ -112,7 +110,10 @@ router.get("/losers", async (req, res) => {
     .from(marketSnapshotsTable)
     .where(eq(marketSnapshotsTable.id, latestScan[0].maxId));
 
-  if (!latestScannedAt[0]) return res.json([]);
+  if (!latestScannedAt[0]) {
+    res.json([]);
+    return;
+  }
 
   const scanTime = latestScannedAt[0].scannedAt;
   const from = new Date(scanTime.getTime() - 5 * 60 * 1000);

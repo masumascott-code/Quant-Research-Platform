@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { paperTradesTable, signalsTable } from "@workspace/db";
-import { eq, and, gte, lte, sql, count, sum, desc } from "drizzle-orm";
+import { eq, and, gte, lte, desc } from "drizzle-orm";
 
 const router = Router();
 

@@ -39,10 +39,16 @@ router.get("/active", async (req, res) => {
 
 router.get("/:id", async (req, res) => {
   const id = Number(req.params.id);
-  if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid ID" });
+    return;
+  }
 
   const [signal] = await db.select().from(signalsTable).where(eq(signalsTable.id, id));
-  if (!signal) return res.status(404).json({ error: "Signal not found" });
+  if (!signal) {
+    res.status(404).json({ error: "Signal not found" });
+    return;
+  }
 
   res.json(formatSignal(signal));
 });

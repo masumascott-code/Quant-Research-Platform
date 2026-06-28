@@ -8,9 +8,8 @@ import {
 } from "@workspace/db";
 import { eq, and, count, gte, desc, lt } from "drizzle-orm";
 import { logger } from "../lib/logger";
-import { analyzeForLong, analyzeForShort, CandleData, scoreToConfidence } from "./signal-engine";
+import { analyzeForLong, analyzeForShort, CandleData } from "./signal-engine";
 import { Telegram } from "./telegram";
-import { reviewClosedTrade } from "./learning-engine";
 import { riskManager } from "./risk-manager";
 
 const BINANCE_BASE = "https://fapi.binance.com";
@@ -130,14 +129,14 @@ export class ScannerService {
   private async fetchAllTickers(): Promise<TickerData[]> {
     const res = await fetch(`${BINANCE_BASE}/fapi/v1/ticker/24hr`);
     if (!res.ok) throw new Error(`Binance API error: ${res.status}`);
-    return res.json();
+    return await res.json() as TickerData[];
   }
 
   private async fetchCandles(symbol: string, interval = "15m", limit = 100): Promise<CandleData[]> {
     const url = `${BINANCE_BASE}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
     const res = await fetch(url);
     if (!res.ok) return [];
-    const raw: any[][] = await res.json();
+    const raw = await res.json() as any[][];
     return raw.map(c => ({
       timestamp: c[0],
       open: Number(c[1]),

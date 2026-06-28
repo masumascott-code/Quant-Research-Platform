@@ -1,4 +1,11 @@
-import { useGetScannerDashboard, getGetScannerDashboardQueryKey, useGetOpenTrades, getGetOpenTradesQueryKey } from "@workspace/api-client-react";
+import {
+  useGetScannerDashboard,
+  getGetScannerDashboardQueryKey,
+  useGetOpenTrades,
+  getGetOpenTradesQueryKey,
+  useGetScannerStatus,
+  getGetScannerStatusQueryKey,
+} from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity, TrendingUp, TrendingDown, Target, Briefcase, DollarSign, Zap, Shield } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,6 +25,13 @@ export default function Dashboard() {
     query: {
       queryKey: getGetOpenTradesQueryKey(),
       refetchInterval: 20000
+    }
+  });
+
+  const { data: scannerStatus } = useGetScannerStatus({
+    query: {
+      queryKey: getGetScannerStatusQueryKey(),
+      refetchInterval: 15000
     }
   });
 
@@ -103,24 +117,24 @@ export default function Dashboard() {
             <div className="pt-2 border-t border-border">
               <div className="flex justify-between font-mono text-xs text-muted-foreground">
                 <span>Today's Trades</span>
-                <span>{dashboard?.todayTrades ?? 0} / 5</span>
+                <span>{scannerStatus?.dailyTrades ?? 0} / 5</span>
               </div>
               <div className="mt-1 h-1.5 bg-muted rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary rounded-full transition-all"
-                  style={{ width: `${Math.min(((dashboard?.todayTrades ?? 0) / 5) * 100, 100)}%` }}
+                  style={{ width: `${Math.min(((scannerStatus?.dailyTrades ?? 0) / 5) * 100, 100)}%` }}
                 />
               </div>
             </div>
             <div>
               <div className="flex justify-between font-mono text-xs text-muted-foreground">
                 <span>Weekly Trades</span>
-                <span>{dashboard?.weekTrades ?? 0} / 15</span>
+                <span>{scannerStatus?.weeklyTrades ?? 0} / 15</span>
               </div>
               <div className="mt-1 h-1.5 bg-muted rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary rounded-full transition-all"
-                  style={{ width: `${Math.min(((dashboard?.weekTrades ?? 0) / 15) * 100, 100)}%` }}
+                  style={{ width: `${Math.min(((scannerStatus?.weeklyTrades ?? 0) / 15) * 100, 100)}%` }}
                 />
               </div>
             </div>
@@ -138,7 +152,7 @@ function LivePositionCard({ trade, livePrices }: { trade: any; livePrices: Recor
   const [flash, setFlash] = useState<"up" | "down" | null>(null);
 
   useEffect(() => {
-    if (markPrice == null) return;
+    if (markPrice == null) return undefined;
     if (prevRef.current != null && markPrice !== prevRef.current) {
       setFlash(markPrice > prevRef.current ? "up" : "down");
       const t = setTimeout(() => setFlash(null), 600);
@@ -146,6 +160,7 @@ function LivePositionCard({ trade, livePrices }: { trade: any; livePrices: Recor
       return () => clearTimeout(t);
     }
     prevRef.current = markPrice;
+    return undefined;
   }, [markPrice]);
 
   const entry = Number(trade.entryPrice);

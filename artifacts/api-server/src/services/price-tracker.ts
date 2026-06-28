@@ -13,6 +13,12 @@ export interface PriceUpdate {
   timestamp: number;
 }
 
+interface BinanceMarkPrice {
+  symbol: string;
+  markPrice: string;
+  time: number;
+}
+
 export class PriceTracker {
   private static instance: PriceTracker;
   private latestPrices = new Map<string, PriceUpdate>();
@@ -88,14 +94,14 @@ export class PriceTracker {
         const url = `${BINANCE_BASE}/fapi/v1/premiumIndex?symbol=${symbols[0]}`;
         const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const data = await res.json() as BinanceMarkPrice;
         entries = [{ symbol: data.symbol, markPrice: data.markPrice, time: data.time }];
       } else {
         // Fetch all and filter — more efficient for multiple symbols
         const url = `${BINANCE_BASE}/fapi/v1/premiumIndex`;
         const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const all: Array<{ symbol: string; markPrice: string; time: number }> = await res.json();
+        const all = await res.json() as BinanceMarkPrice[];
         entries = all.filter(d => this.trackedSymbols.has(d.symbol));
       }
 

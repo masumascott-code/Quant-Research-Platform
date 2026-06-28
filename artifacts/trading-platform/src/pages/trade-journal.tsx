@@ -1,4 +1,4 @@
-import { useGetTrades, getGetTradesQueryKey, GetTradesStatus, GetTradesResult } from "@workspace/api-client-react";
+import { useGetTrades, getGetTradesQueryKey } from "@workspace/api-client-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BookOpen } from "lucide-react";
@@ -14,7 +14,7 @@ export default function TradeJournal() {
     }
   );
 
-  const trades = tradesData?.data || [];
+  const trades = tradesData || [];
 
   return (
     <div className="space-y-6">
