@@ -91,6 +91,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      disable: true
     logging: *json-logs
 
   scheduler:
@@ -112,6 +114,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      disable: true
     logging: *json-logs
 
   web:

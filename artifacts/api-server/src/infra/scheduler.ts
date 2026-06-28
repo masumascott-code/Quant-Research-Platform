@@ -89,7 +89,6 @@ export class Scheduler {
           );
         });
       }, scheduled.intervalMs);
-      scheduled.timer.unref();
 
       if (process.env.SCHEDULER_ENQUEUE_ON_START === "true") {
         queueManager.add(scheduled.job).catch((err) => {
