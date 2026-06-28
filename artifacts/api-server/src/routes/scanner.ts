@@ -7,6 +7,7 @@ import {
   paperTradesTable,
 } from "@workspace/db";
 import { eq, desc, sql, and, gte, count, sum } from "drizzle-orm";
+import { configService } from "../core/config";
 import { ScannerService } from "../services/scanner";
 
 const router = Router();
@@ -83,7 +84,7 @@ router.get("/gainers", async (req, res) => {
   }
 
   const scanTime = latestScannedAt[0].scannedAt;
-  const from = new Date(scanTime.getTime() - 5 * 60 * 1000);
+  const from = new Date(scanTime.getTime() - configService.getSync().scanner.snapshotFreshnessWindowMs);
 
   const gainers = await db
     .select()
@@ -116,7 +117,7 @@ router.get("/losers", async (req, res) => {
   }
 
   const scanTime = latestScannedAt[0].scannedAt;
-  const from = new Date(scanTime.getTime() - 5 * 60 * 1000);
+  const from = new Date(scanTime.getTime() - configService.getSync().scanner.snapshotFreshnessWindowMs);
 
   const losers = await db
     .select()

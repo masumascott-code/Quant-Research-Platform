@@ -2,10 +2,7 @@ import { db } from "@workspace/db";
 import { paperTradesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
-
-const BINANCE_BASE = "https://fapi.binance.com";
-const POLL_INTERVAL_MS = 3_000;
-const SYMBOL_REFRESH_MS = 30_000;
+import { configService } from "../core/config";
 
 export interface PriceUpdate {
   symbol: string;
@@ -38,6 +35,7 @@ export class PriceTracker {
   }
 
   async start() {
+    await configService.reload();
     await this.refreshSymbols();
     // Immediately fetch prices after symbols are loaded
     await this.fetchPrices();
@@ -46,7 +44,7 @@ export class PriceTracker {
     // Refresh symbol list periodically (picks up new trades)
     this.refreshTimer = setInterval(() => {
       this.refreshSymbols().catch(err => logger.error({ err }, "refreshSymbols error"));
-    }, SYMBOL_REFRESH_MS);
+    }, configService.getSync().priceTracker.symbolRefreshMs);
     logger.info("Price tracker started");
   }
 
@@ -54,7 +52,7 @@ export class PriceTracker {
     this.pollTimer = setTimeout(async () => {
       await this.fetchPrices();
       this.schedulePoll();
-    }, POLL_INTERVAL_MS);
+    }, configService.getSync().priceTracker.pollIntervalMs);
   }
 
   private async refreshSymbols() {
@@ -91,15 +89,17 @@ export class PriceTracker {
       let entries: Array<{ symbol: string; markPrice: string; time: number }>;
 
       if (symbols.length === 1) {
-        const url = `${BINANCE_BASE}/fapi/v1/premiumIndex?symbol=${symbols[0]}`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+        const config = configService.getSync().priceTracker;
+        const url = `${config.binanceBaseUrl}/fapi/v1/premiumIndex?symbol=${symbols[0]}`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(config.fetchTimeoutMs) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json() as BinanceMarkPrice;
         entries = [{ symbol: data.symbol, markPrice: data.markPrice, time: data.time }];
       } else {
         // Fetch all and filter — more efficient for multiple symbols
-        const url = `${BINANCE_BASE}/fapi/v1/premiumIndex`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+        const config = configService.getSync().priceTracker;
+        const url = `${config.binanceBaseUrl}/fapi/v1/premiumIndex`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(config.fetchTimeoutMs) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const all = await res.json() as BinanceMarkPrice[];
         entries = all.filter(d => this.trackedSymbols.has(d.symbol));

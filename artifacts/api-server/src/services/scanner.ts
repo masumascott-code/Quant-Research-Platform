@@ -8,19 +8,10 @@ import {
 } from "@workspace/db";
 import { eq, and, count, gte, desc, lt } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { configService, type RuntimeConfig, type ScannerRuntimeConfig } from "../core/config";
 import { analyzeForLong, analyzeForShort, CandleData } from "./signal-engine";
 import { Telegram } from "./telegram";
 import { riskManager } from "./risk-manager";
-
-const BINANCE_BASE = "https://fapi.binance.com";
-const SCAN_INTERVAL_MS = 30_000;
-const MIN_VOLUME_24H = 50_000_000;
-const MIN_RVOL = 1.3;
-const MAX_OPEN_TRADES = 3;
-const MAX_DAILY_TRADES = 5;
-const MAX_WEEKLY_TRADES = 15;
-const MIN_SCORE_TRADE = 90;
-const MIN_SCORE_WATCHLIST = 80;
 
 interface TickerData {
   symbol: string;
@@ -45,8 +36,9 @@ export class ScannerService {
   }
 
   getStatus() {
+    const { scanIntervalMs } = configService.getSync().scanner;
     const nextScanIn = this.scanStart && this.running
-      ? Math.max(0, Math.round((this.scanStart + SCAN_INTERVAL_MS - Date.now()) / 1000))
+      ? Math.max(0, Math.round((this.scanStart + scanIntervalMs - Date.now()) / 1000))
       : null;
     return { running: this.running, lastScanAt: this.lastScanAt, nextScanIn };
   }
@@ -54,6 +46,7 @@ export class ScannerService {
   async start() {
     if (this.running) return;
     this.running = true;
+    await configService.reload();
     await Telegram.scannerStarted();
     logger.info("Scanner started");
     await this.scan();
@@ -69,34 +62,36 @@ export class ScannerService {
 
   private scheduleNext() {
     if (!this.running) return;
+    const { scanIntervalMs } = configService.getSync().scanner;
     this.scanStart = Date.now();
     this.timer = setTimeout(async () => {
       if (!this.running) return;
       await this.scan();
       this.scheduleNext();
-    }, SCAN_INTERVAL_MS);
+    }, scanIntervalMs);
   }
 
   private async scan() {
     try {
+      const runtimeConfig = await configService.get();
+      const config = runtimeConfig.scanner;
       logger.info("Starting market scan (v2.0)");
-      const tickers = await this.fetchAllTickers();
+      const tickers = await this.fetchAllTickers(config);
       if (!tickers || tickers.length === 0) return;
 
       const usdtPairs = tickers.filter(t =>
-        t.symbol.endsWith("USDT") &&
-        !t.symbol.startsWith("BTC") &&
-        !t.symbol.startsWith("1000") &&
-        Number(t.quoteVolume) >= MIN_VOLUME_24H
+        t.symbol.endsWith(config.quoteAsset) &&
+        !config.excludedSymbolPrefixes.some(prefix => t.symbol.startsWith(prefix)) &&
+        Number(t.quoteVolume) >= config.minVolume24h
       );
 
-      await this.syncCoins(usdtPairs);
+      await this.syncCoins(usdtPairs, config);
 
       const sorted = [...usdtPairs].sort((a, b) =>
         Number(b.priceChangePercent) - Number(a.priceChangePercent)
       );
-      const gainers = sorted.slice(0, 20);
-      const losers = sorted.slice(-20).reverse();
+      const gainers = sorted.slice(0, config.topListSize);
+      const losers = sorted.slice(-config.topListSize).reverse();
 
       this.lastScanAt = new Date().toISOString();
       await this.saveSnapshots(gainers, "gainer");
@@ -107,18 +102,18 @@ export class ScannerService {
 
       const riskCheck = await riskManager.canTrade();
 
-      for (const ticker of gainers.slice(0, 10)) {
-        await this.analyzeSymbol(ticker, "LONG", riskCheck.allowed);
-        await sleep(300);
+      for (const ticker of gainers.slice(0, config.analysisListSize)) {
+        await this.analyzeSymbol(ticker, "LONG", riskCheck.allowed, runtimeConfig);
+        await sleep(config.symbolCooldownMs);
       }
 
-      for (const ticker of losers.slice(0, 10)) {
-        await this.analyzeSymbol(ticker, "SHORT", riskCheck.allowed);
-        await sleep(300);
+      for (const ticker of losers.slice(0, config.analysisListSize)) {
+        await this.analyzeSymbol(ticker, "SHORT", riskCheck.allowed, runtimeConfig);
+        await sleep(config.symbolCooldownMs);
       }
 
       // Re-check watchlist items
-      await this.checkWatchlist(tickers);
+      await this.checkWatchlist(tickers, runtimeConfig);
 
       logger.info({ gainers: gainers.length, losers: losers.length }, "Scan v2 complete");
     } catch (err) {
@@ -126,14 +121,14 @@ export class ScannerService {
     }
   }
 
-  private async fetchAllTickers(): Promise<TickerData[]> {
-    const res = await fetch(`${BINANCE_BASE}/fapi/v1/ticker/24hr`);
+  private async fetchAllTickers(config: ScannerRuntimeConfig): Promise<TickerData[]> {
+    const res = await fetch(`${config.binanceBaseUrl}/fapi/v1/ticker/24hr`);
     if (!res.ok) throw new Error(`Binance API error: ${res.status}`);
     return await res.json() as TickerData[];
   }
 
-  private async fetchCandles(symbol: string, interval = "15m", limit = 100): Promise<CandleData[]> {
-    const url = `${BINANCE_BASE}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  private async fetchCandles(symbol: string, interval: string, limit: number, config: ScannerRuntimeConfig): Promise<CandleData[]> {
+    const url = `${config.binanceBaseUrl}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
     const res = await fetch(url);
     if (!res.ok) return [];
     const raw = await res.json() as any[][];
@@ -147,11 +142,11 @@ export class ScannerService {
     }));
   }
 
-  private async syncCoins(tickers: TickerData[]) {
+  private async syncCoins(tickers: TickerData[], config: ScannerRuntimeConfig) {
     for (const t of tickers) {
-      const baseAsset = t.symbol.replace("USDT", "");
+      const baseAsset = t.symbol.replace(config.quoteAsset, "");
       await db.insert(coinsTable).values({
-        symbol: t.symbol, baseAsset, quoteAsset: "USDT", isActive: true,
+        symbol: t.symbol, baseAsset, quoteAsset: config.quoteAsset, isActive: true,
         lastPrice: t.lastPrice, volume24h: t.quoteVolume, priceChangePercent: t.priceChangePercent,
       }).onConflictDoUpdate({
         target: coinsTable.symbol,
@@ -161,6 +156,7 @@ export class ScannerService {
   }
 
   private async saveSnapshots(tickers: TickerData[], listType: "gainer" | "loser") {
+    const config = configService.getSync().scanner;
     for (let i = 0; i < tickers.length; i++) {
       const t = tickers[i];
       const [coin] = await db.select().from(coinsTable).where(eq(coinsTable.symbol, t.symbol));
@@ -168,29 +164,30 @@ export class ScannerService {
       await db.insert(marketSnapshotsTable).values({
         coinId: coin.id, symbol: t.symbol, price: t.lastPrice,
         priceChangePercent: t.priceChangePercent, volume24h: t.quoteVolume,
-        rvol: "1.5", rank: i + 1, listType, scannedAt: new Date(),
+        rvol: String(config.snapshotRvolFallback), rank: i + 1, listType, scannedAt: new Date(),
       }).onConflictDoNothing();
     }
   }
 
-  private async analyzeSymbol(ticker: TickerData, direction: "LONG" | "SHORT", canOpenTrade: boolean) {
+  private async analyzeSymbol(ticker: TickerData, direction: "LONG" | "SHORT", canOpenTrade: boolean, runtimeConfig: RuntimeConfig) {
+    const config = runtimeConfig.scanner;
     const symbol = ticker.symbol;
     const currentPrice = Number(ticker.lastPrice);
     const volume24h = Number(ticker.quoteVolume);
 
     try {
       // Pre-filter with quick RVOL check on 15m
-      const candles15m = await this.fetchCandles(symbol, "15m", 100);
-      if (candles15m.length < 60) return;
+      const candles15m = await this.fetchCandles(symbol, "15m", config.candles15mLimit, config);
+      if (candles15m.length < config.minCandles15m) return;
 
-      const avgVol = candles15m.slice(-21, -1).reduce((a, b) => a + b.volume, 0) / 20;
+      const avgVol = candles15m.slice(-config.volumeLookback - 1, -1).reduce((a, b) => a + b.volume, 0) / config.volumeLookback;
       const rvol = avgVol > 0 ? candles15m[candles15m.length - 1].volume / avgVol : 1;
-      if (rvol < MIN_RVOL) return;
+      if (rvol < config.minRvol) return;
 
       // Fetch all timeframes for multi-TF analysis
       const [candles5m, candlesH1] = await Promise.all([
-        this.fetchCandles(symbol, "5m", 60),
-        this.fetchCandles(symbol, "1h", 50),
+        this.fetchCandles(symbol, "5m", config.candles5mLimit, config),
+        this.fetchCandles(symbol, "1h", config.candlesH1Limit, config),
       ]);
 
       const mtf = { m5: candles5m, h1: candlesH1, m1: [] };
@@ -201,12 +198,12 @@ export class ScannerService {
       if (existingSignal.length > 0) return;
 
       const analysis = direction === "LONG"
-        ? analyzeForLong(symbol, candles15m, currentPrice, volume24h, mtf)
-        : analyzeForShort(symbol, candles15m, currentPrice, volume24h, mtf);
+        ? analyzeForLong(symbol, candles15m, currentPrice, volume24h, mtf, runtimeConfig.signal)
+        : analyzeForShort(symbol, candles15m, currentPrice, volume24h, mtf, runtimeConfig.signal);
 
       if (!analysis) return;
 
-      if (analysis.score >= MIN_SCORE_TRADE) {
+      if (analysis.score >= config.minScoreTrade) {
         // A/A+ signal — try to open a trade
         const canTrade = await this.checkTradingLimits();
         if (!canTrade) {
@@ -233,7 +230,7 @@ export class ScannerService {
         });
         await this.openPaperTrade(newSignal, analysis);
 
-      } else if (analysis.score >= MIN_SCORE_WATCHLIST) {
+      } else if (analysis.score >= config.minScoreWatchlist) {
         // Near-miss — add to watchlist
         await this.addToWatchlist(symbol, analysis);
       }
@@ -244,7 +241,7 @@ export class ScannerService {
   }
 
   private async saveSignal(symbol: string, analysis: any, status: string) {
-    const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + configService.getSync().scanner.signalTtlMs);
     const [newSignal] = await db.insert(signalsTable).values({
       symbol, direction: analysis.direction, score: String(analysis.score),
       grade: analysis.grade!, confidence: analysis.confidence,
@@ -266,6 +263,7 @@ export class ScannerService {
   }
 
   private async openPaperTrade(signal: any, analysis: any) {
+    const { defaultQuantity } = configService.getSync().paperTrading;
     const tradeId = `PT-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
     const [trade] = await db.insert(paperTradesTable).values({
@@ -275,7 +273,7 @@ export class ScannerService {
       entryPrice: String(analysis.entryPrice), stopLoss: String(analysis.stopLoss),
       currentSl: String(analysis.stopLoss),
       tp1: String(analysis.tp1), tp2: String(analysis.tp2), tp3: String(analysis.tp3),
-      quantity: "1", signalScore: String(analysis.score), signalGrade: analysis.grade,
+      quantity: String(defaultQuantity), signalScore: String(analysis.score), signalGrade: analysis.grade,
       reason: analysis.reason, slReason: analysis.slReason, status: "open",
     }).returning();
 
@@ -300,7 +298,7 @@ export class ScannerService {
       .where(and(eq(watchlistTable.symbol, symbol), eq(watchlistTable.isActive, true)));
     if (existing.length > 0) return;
 
-    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + configService.getSync().scanner.watchlistTtlMs);
     await db.insert(watchlistTable).values({
       symbol, direction: analysis.direction, score: String(analysis.score),
       confidence: analysis.confidence, setupType: analysis.setupType,
@@ -314,7 +312,8 @@ export class ScannerService {
     logger.info({ symbol, score: analysis.score, setupType: analysis.setupType }, "Added to watchlist");
   }
 
-  private async checkWatchlist(tickers: TickerData[]) {
+  private async checkWatchlist(tickers: TickerData[], runtimeConfig: RuntimeConfig) {
+    const config = runtimeConfig.scanner;
     const items = await db.select().from(watchlistTable).where(eq(watchlistTable.isActive, true));
     if (items.length === 0) return;
 
@@ -325,12 +324,12 @@ export class ScannerService {
       if (!ticker) continue;
 
       try {
-        const candles15m = await this.fetchCandles(item.symbol, "15m", 100);
-        if (candles15m.length < 60) continue;
+        const candles15m = await this.fetchCandles(item.symbol, "15m", config.candles15mLimit, config);
+        if (candles15m.length < config.minCandles15m) continue;
 
         const [candles5m, candlesH1] = await Promise.all([
-          this.fetchCandles(item.symbol, "5m", 60),
-          this.fetchCandles(item.symbol, "1h", 50),
+          this.fetchCandles(item.symbol, "5m", config.candles5mLimit, config),
+          this.fetchCandles(item.symbol, "1h", config.candlesH1Limit, config),
         ]);
 
         const mtf = { m5: candles5m, h1: candlesH1, m1: [] };
@@ -338,12 +337,12 @@ export class ScannerService {
         const volume24h = Number(ticker.quoteVolume);
 
         const analysis = item.direction === "LONG"
-          ? analyzeForLong(item.symbol, candles15m, currentPrice, volume24h, mtf)
-          : analyzeForShort(item.symbol, candles15m, currentPrice, volume24h, mtf);
+          ? analyzeForLong(item.symbol, candles15m, currentPrice, volume24h, mtf, runtimeConfig.signal)
+          : analyzeForShort(item.symbol, candles15m, currentPrice, volume24h, mtf, runtimeConfig.signal);
 
         if (!analysis) continue;
 
-        if (analysis.score >= MIN_SCORE_TRADE) {
+        if (analysis.score >= config.minScoreTrade) {
           // Promoted from watchlist!
           await db.update(watchlistTable).set({ isActive: false, promoted: true }).where(eq(watchlistTable.id, item.id));
           logger.info({ symbol: item.symbol, score: analysis.score }, "Watchlist item promoted to signal");
@@ -364,7 +363,7 @@ export class ScannerService {
             await this.openPaperTrade(newSignal, analysis);
           }
         }
-        await sleep(200);
+        await sleep(config.watchlistCheckCooldownMs);
       } catch (err) {
         logger.error({ err, symbol: item.symbol }, "Watchlist check failed");
       }
@@ -379,17 +378,18 @@ export class ScannerService {
   }
 
   private async checkTradingLimits(): Promise<boolean> {
+    const config = (await configService.get()).scanner;
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay()); weekStart.setHours(0, 0, 0, 0);
 
     const [openCount] = await db.select({ c: count() }).from(paperTradesTable).where(eq(paperTradesTable.status, "open"));
-    if (Number(openCount.c) >= MAX_OPEN_TRADES) { logger.info({ open: openCount.c }, "Max open trades reached"); return false; }
+    if (Number(openCount.c) >= config.maxOpenTrades) { logger.info({ open: openCount.c }, "Max open trades reached"); return false; }
 
     const [dailyCount] = await db.select({ c: count() }).from(paperTradesTable).where(gte(paperTradesTable.openedAt, today));
-    if (Number(dailyCount.c) >= MAX_DAILY_TRADES) { logger.info({ daily: dailyCount.c }, "Max daily trades reached"); return false; }
+    if (Number(dailyCount.c) >= config.maxDailyTrades) { logger.info({ daily: dailyCount.c }, "Max daily trades reached"); return false; }
 
     const [weeklyCount] = await db.select({ c: count() }).from(paperTradesTable).where(gte(paperTradesTable.openedAt, weekStart));
-    if (Number(weeklyCount.c) >= MAX_WEEKLY_TRADES) { logger.info({ weekly: weeklyCount.c }, "Max weekly trades reached"); return false; }
+    if (Number(weeklyCount.c) >= config.maxWeeklyTrades) { logger.info({ weekly: weeklyCount.c }, "Max weekly trades reached"); return false; }
 
     return true;
   }

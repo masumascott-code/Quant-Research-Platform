@@ -13,11 +13,10 @@ import { db } from "@workspace/db";
 import { paperTradesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { configService } from "../core/config";
 import { PriceTracker } from "./price-tracker";
 import { Telegram } from "./telegram";
 import { reviewClosedTrade } from "./learning-engine";
-
-const CHECK_INTERVAL_MS = 30_000;
 
 export class SlMonitor {
   private static instance: SlMonitor;
@@ -32,6 +31,7 @@ export class SlMonitor {
   start() {
     if (this.running) return;
     this.running = true;
+    configService.reload().catch(err => logger.error({ err }, "Failed to reload runtime config before SL monitor start"));
     logger.info("SL/TP monitor started");
     this.schedule();
   }
@@ -47,7 +47,7 @@ export class SlMonitor {
       if (!this.running) return;
       await this.check();
       this.schedule();
-    }, CHECK_INTERVAL_MS);
+    }, configService.getSync().slMonitor.checkIntervalMs);
   }
 
   private async check() {
@@ -170,7 +170,7 @@ export class SlMonitor {
     let result: string;
     if (forceResult) {
       result = forceResult;
-    } else if (Math.abs(pnl) < 0.001) {
+    } else if (Math.abs(pnl) < configService.getSync().paperTrading.breakEvenPnlThreshold) {
       result = "BREAKEVEN";
     } else {
       result = pnl > 0 ? "WIN" : "LOSS";

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { paperTradesTable } from "@workspace/db";
 import { eq, desc, and } from "drizzle-orm";
+import { configService } from "../core/config";
 
 const router = Router();
 
@@ -101,7 +102,7 @@ router.post("/:id/close", async (req, res) => {
   const risk = Math.abs(entryPrice - stopLoss);
 
   let result: string;
-  if (Math.abs(pnl) < 0.001) {
+  if (Math.abs(pnl) < configService.getSync().paperTrading.breakEvenPnlThreshold) {
     result = "BREAKEVEN";
   } else if (pnl > 0) {
     result = "WIN";

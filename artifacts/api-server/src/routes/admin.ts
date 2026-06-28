@@ -2,30 +2,16 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { systemSettingsTable, paperTradesTable, signalsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
+import { configService } from "../core/config";
 import { riskManager } from "../services/risk-manager";
 import { ScannerService } from "../services/scanner";
 
 const router = Router();
 
-const DEFAULT_SETTINGS: Record<string, string> = {
-  scan_interval_seconds: "30",
-  min_score_trade: "90",
-  min_score_watchlist: "80",
-  min_rvol: "1.3",
-  risk_pct: "1",
-  cooldown_minutes: "15",
-  max_open_trades: "3",
-  max_daily_trades: "5",
-  max_consecutive_losses: "2",
-  telegram_enabled: "true",
-  scanner_enabled: "true",
-  emergency_stop: "false",
-};
-
 router.get("/settings", async (req, res) => {
   try {
     const rows = await db.select().from(systemSettingsTable);
-    const settings: Record<string, string> = { ...DEFAULT_SETTINGS };
+    const settings: Record<string, string> = { ...configService.defaultsFlat(true) };
     for (const row of rows) {
       settings[row.key] = row.value;
     }
@@ -46,6 +32,8 @@ router.post("/settings", async (req, res) => {
           set: { value, updatedAt: new Date() },
         });
     }
+    configService.invalidate();
+    await configService.reload();
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to update settings" });
@@ -64,7 +52,7 @@ router.get("/risk-state", async (req, res) => {
 router.post("/risk/pause", async (req, res) => {
   try {
     const { reason, durationMinutes } = req.body;
-    await riskManager.pause(reason ?? "Manual pause", durationMinutes ?? 60);
+    await riskManager.pause(reason ?? "Manual pause", durationMinutes ?? configService.getSync().risk.manualPauseDefaultMinutes);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to pause" });
@@ -84,7 +72,7 @@ router.post("/emergency-stop", async (req, res) => {
   try {
     const scanner = ScannerService.getInstance();
     scanner.stop();
-    await riskManager.pause("Emergency stop activated", 24 * 60);
+    await riskManager.pause("Emergency stop activated", configService.getSync().risk.emergencyPauseMinutes);
     res.json({ success: true, message: "Emergency stop activated" });
   } catch (err) {
     res.status(500).json({ error: "Failed to activate emergency stop" });

@@ -2,6 +2,7 @@ import { db } from "@workspace/db";
 import { paperTradesTable, systemSettingsTable } from "@workspace/db";
 import { eq, desc, gte, and } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { configService } from "../core/config";
 
 export interface RiskState {
   isPaused: boolean;
@@ -12,11 +13,6 @@ export interface RiskState {
   cooldownUntil: Date | null;
   dailyLossPercent: number;
 }
-
-const COOLDOWN_MINUTES = 15;
-const MAX_CONSECUTIVE_LOSSES = 2;
-const PAUSE_AFTER_LOSSES_MINUTES = 60;
-const DAILY_DRAWDOWN_LIMIT = 3.0;
 
 class RiskManager {
   private static instance: RiskManager;
@@ -70,7 +66,12 @@ class RiskManager {
   }
 
   async canTrade(): Promise<{ allowed: boolean; reason: string }> {
+    const config = (await configService.get()).risk;
     const state = await this.getState();
+
+    if (config.killSwitch) {
+      return { allowed: false, reason: "Kill switch active. Trading is disabled." };
+    }
 
     if (state.isPaused) {
       const mins = Math.ceil((state.pauseUntil!.getTime() - Date.now()) / 60000);
@@ -82,32 +83,34 @@ class RiskManager {
       return { allowed: false, reason: `Cooldown active — ${mins}m remaining after last trade.` };
     }
 
-    if (state.dailyLossPercent >= DAILY_DRAWDOWN_LIMIT) {
-      await this.pause(`Daily drawdown limit ${DAILY_DRAWDOWN_LIMIT}% reached`, 24 * 60);
+    if (state.dailyLossPercent >= config.dailyDrawdownLimitPercent) {
+      await this.pause(`Daily drawdown limit ${config.dailyDrawdownLimitPercent}% reached`, config.emergencyPauseMinutes);
       return { allowed: false, reason: `Daily drawdown limit hit (${state.dailyLossPercent.toFixed(2)}%). Trading paused until tomorrow.` };
     }
 
-    if (state.consecutiveLosses >= MAX_CONSECUTIVE_LOSSES) {
-      await this.pause(`${MAX_CONSECUTIVE_LOSSES} consecutive losses`, PAUSE_AFTER_LOSSES_MINUTES);
-      return { allowed: false, reason: `${MAX_CONSECUTIVE_LOSSES} consecutive losses — trading paused for ${PAUSE_AFTER_LOSSES_MINUTES}m.` };
+    if (state.consecutiveLosses >= config.maxConsecutiveLosses) {
+      await this.pause(`${config.maxConsecutiveLosses} consecutive losses`, config.pauseAfterLossesMinutes);
+      return { allowed: false, reason: `${config.maxConsecutiveLosses} consecutive losses — trading paused for ${config.pauseAfterLossesMinutes}m.` };
     }
 
     return { allowed: true, reason: "OK" };
   }
 
   async recordTradeOpened(): Promise<void> {
+    const config = (await configService.get()).risk;
     const now = new Date();
-    const cooldownUntil = new Date(now.getTime() + COOLDOWN_MINUTES * 60 * 1000);
+    const cooldownUntil = new Date(now.getTime() + config.cooldownMinutes * 60 * 1000);
     await this.setSetting("risk_last_trade_at", now.toISOString());
     await this.setSetting("risk_cooldown_until", cooldownUntil.toISOString());
     logger.info({ cooldownUntil: cooldownUntil.toISOString() }, "Risk cooldown started");
   }
 
   async recordTradeClosed(result: string): Promise<void> {
+    const config = (await configService.get()).risk;
     if (result === "LOSS") {
       const losses = await this.getConsecutiveLosses();
-      if (losses + 1 >= MAX_CONSECUTIVE_LOSSES) {
-        await this.pause(`${MAX_CONSECUTIVE_LOSSES} consecutive losses`, PAUSE_AFTER_LOSSES_MINUTES);
+      if (losses + 1 >= config.maxConsecutiveLosses) {
+        await this.pause(`${config.maxConsecutiveLosses} consecutive losses`, config.pauseAfterLossesMinutes);
         logger.warn({ losses: losses + 1 }, "Max consecutive losses reached — pausing trading");
       }
     }
@@ -127,11 +130,12 @@ class RiskManager {
   }
 
   private async getConsecutiveLosses(): Promise<number> {
+    const config = (await configService.get()).risk;
     const recent = await db.select()
       .from(paperTradesTable)
       .where(eq(paperTradesTable.status, "closed"))
       .orderBy(desc(paperTradesTable.closedAt))
-      .limit(5);
+      .limit(config.recentLossLookback);
 
     let streak = 0;
     for (const t of recent) {
