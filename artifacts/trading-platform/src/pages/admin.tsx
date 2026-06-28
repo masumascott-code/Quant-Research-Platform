@@ -11,6 +11,7 @@ import {
   Activity, Zap, Clock, RefreshCw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface RiskState {
   isPaused: boolean;
@@ -23,53 +24,41 @@ interface RiskState {
 }
 
 async function fetchSettings() {
-  const res = await fetch(`${import.meta.env.BASE_URL}api/admin/settings`);
-  if (!res.ok) throw new Error("Failed to fetch settings");
-  return res.json() as Promise<{ settings: Record<string, string> }>;
+  return await apiFetch<{ settings: Record<string, string> }>("api/admin/settings");
 }
 
 async function fetchRiskState() {
-  const res = await fetch(`${import.meta.env.BASE_URL}api/admin/risk-state`);
-  if (!res.ok) throw new Error("Failed to fetch risk state");
-  return res.json() as Promise<RiskState>;
+  return await apiFetch<RiskState>("api/admin/risk-state");
 }
 
 async function saveSettings(settings: Record<string, string>) {
-  const res = await fetch(`${import.meta.env.BASE_URL}api/admin/settings`, {
+  return await apiFetch("api/admin/settings", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ settings }),
   });
-  if (!res.ok) throw new Error("Failed to save settings");
-  return res.json();
 }
 
 async function pauseTrading(reason: string) {
-  const res = await fetch(`${import.meta.env.BASE_URL}api/admin/risk/pause`, {
+  return await apiFetch("api/admin/risk/pause", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ reason, durationMinutes: 60 }),
   });
-  if (!res.ok) throw new Error("Failed to pause");
-  return res.json();
 }
 
 async function resumeTrading() {
-  const res = await fetch(`${import.meta.env.BASE_URL}api/admin/risk/resume`, {
+  return await apiFetch("api/admin/risk/resume", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
   });
-  if (!res.ok) throw new Error("Failed to resume");
-  return res.json();
 }
 
 async function emergencyStop() {
-  const res = await fetch(`${import.meta.env.BASE_URL}api/admin/emergency-stop`, {
+  return await apiFetch("api/admin/emergency-stop", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
   });
-  if (!res.ok) throw new Error("Failed to trigger emergency stop");
-  return res.json();
 }
 
 export default function Admin() {

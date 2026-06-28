@@ -1,0 +1,12 @@
+$ drizzle-kit push --config ./drizzle.config.ts
+$ node ./build.mjs
+
+  dist\index.mjs                   2.4mb
+  dist\pino-worker.mjs           153.5kb
+  dist\pino-file.mjs             142.1kb
+  dist\pino-pretty.mjs           114.6kb
+  dist\thread-stream-worker.mjs    7.3kb
+  ...and 5 more output files...
+
+Done in 737ms
+$ vite --config vite.config.ts --host 0.0.0.0

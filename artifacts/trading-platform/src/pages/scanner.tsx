@@ -127,7 +127,7 @@ export default function Scanner() {
                   </TableRow>
                 ) : (
                   gainers?.map((coin) => (
-                    <TableRow key={coin.symbol} className="border-border hover:bg-muted/50">
+                    <TableRow key={`${coin.symbol}-${coin.id}`} className="border-border hover:bg-muted/50">
                       <TableCell className="font-mono font-bold">{coin.symbol}</TableCell>
                       <TableCell className="font-mono text-right">{coin.price.toFixed(4)}</TableCell>
                       <TableCell className="font-mono text-right text-success">+{coin.priceChangePercent.toFixed(2)}%</TableCell>
@@ -173,7 +173,7 @@ export default function Scanner() {
                   </TableRow>
                 ) : (
                   losers?.map((coin) => (
-                    <TableRow key={coin.symbol} className="border-border hover:bg-muted/50">
+                    <TableRow key={`${coin.symbol}-${coin.id}`} className="border-border hover:bg-muted/50">
                       <TableCell className="font-mono font-bold">{coin.symbol}</TableCell>
                       <TableCell className="font-mono text-right">{coin.price.toFixed(4)}</TableCell>
                       <TableCell className="font-mono text-right text-destructive">{coin.priceChangePercent.toFixed(2)}%</TableCell>

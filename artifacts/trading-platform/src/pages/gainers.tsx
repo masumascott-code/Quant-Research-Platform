@@ -56,7 +56,7 @@ export default function Gainers() {
               </TableRow>
             ) : (
               gainers?.map((coin) => (
-                <TableRow key={coin.symbol} className="border-border hover:bg-muted/50 transition-colors">
+                <TableRow key={`${coin.symbol}-${coin.id}`} className="border-border hover:bg-muted/50 transition-colors">
                   <TableCell className="font-mono text-muted-foreground">{coin.rank}</TableCell>
                   <TableCell className="font-mono font-bold text-foreground">{coin.symbol}</TableCell>
                   <TableCell className="font-mono text-right">{coin.price.toFixed(4)}</TableCell>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { authHeaders, notifyUnauthorized } from "@/lib/auth";
 
 export interface PriceUpdate {
   symbol: string;
@@ -20,7 +21,14 @@ export function useLivePrices() {
       if (unmounted) return;
       abortRef.current = new AbortController();
       try {
-        const res = await fetch("/api/live/prices", { signal: abortRef.current.signal });
+        const res = await fetch(`${import.meta.env.BASE_URL}api/live/prices`, {
+          signal: abortRef.current.signal,
+          headers: authHeaders(),
+        });
+        if (res.status === 401) {
+          notifyUnauthorized();
+          return;
+        }
         if (!unmounted && res.ok) {
           const data: Record<string, PriceUpdate> = await res.json();
           if (Object.keys(data).length > 0) {

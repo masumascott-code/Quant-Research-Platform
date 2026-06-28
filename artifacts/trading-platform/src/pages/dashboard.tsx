@@ -12,9 +12,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useLivePrices } from "@/hooks/use-live-prices";
 import { useEffect, useRef, useState } from "react";
+import { isUnauthorizedError } from "@/lib/auth";
 
 export default function Dashboard() {
-  const { data: dashboard, isLoading } = useGetScannerDashboard({
+  const { data: dashboard, isLoading, isError: dashboardError, error: dashboardQueryError } = useGetScannerDashboard({
     query: {
       queryKey: getGetScannerDashboardQueryKey(),
       refetchInterval: 15000
@@ -28,7 +29,7 @@ export default function Dashboard() {
     }
   });
 
-  const { data: scannerStatus } = useGetScannerStatus({
+  const { data: scannerStatus, isError: scannerStatusError, error: scannerStatusQueryError } = useGetScannerStatus({
     query: {
       queryKey: getGetScannerStatusQueryKey(),
       refetchInterval: 15000
@@ -36,6 +37,16 @@ export default function Dashboard() {
   });
 
   const livePrices = useLivePrices();
+  const scannerAuthError = isUnauthorizedError(dashboardQueryError) || isUnauthorizedError(scannerStatusQueryError);
+  const scannerUnavailable = dashboardError || scannerStatusError;
+  const scannerStatusLabel = scannerAuthError
+    ? "Authentication Required"
+    : scannerUnavailable
+      ? "Unable to retrieve scanner status"
+      : dashboard?.scannerRunning
+        ? "ACTIVE"
+        : "STOPPED";
+  const scannerStatusOk = !scannerUnavailable && !!dashboard?.scannerRunning;
 
   return (
     <div className="space-y-6">
@@ -48,6 +59,10 @@ export default function Dashboard() {
             Status:
             {isLoading ? (
               <span className="text-muted-foreground">LOADING</span>
+            ) : scannerUnavailable ? (
+              <span className={scannerAuthError ? "text-yellow-400" : "text-muted-foreground"}>
+                {scannerStatusLabel}
+              </span>
             ) : dashboard?.scannerRunning ? (
               <span className="text-success flex items-center gap-1">
                 <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
@@ -110,7 +125,7 @@ export default function Dashboard() {
             <CardTitle className="text-sm font-mono text-muted-foreground uppercase">System Status</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <StatusRow label="Scanner Engine" status={dashboard?.scannerRunning ? "RUNNING" : "STOPPED"} ok={!!dashboard?.scannerRunning} />
+            <StatusRow label="Scanner Engine" status={scannerStatusLabel} ok={scannerStatusOk} />
             <StatusRow label="Live Price Feed" status={Object.keys(livePrices).length > 0 ? "CONNECTED" : "AWAITING"} ok={Object.keys(livePrices).length > 0} />
             <StatusRow label="Database" status="CONNECTED" ok={true} />
             <StatusRow label="Binance API" status={dashboard?.lastScanAt ? "REACHABLE" : "---"} ok={!!dashboard?.lastScanAt} />

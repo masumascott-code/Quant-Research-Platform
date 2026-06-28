@@ -118,6 +118,44 @@ export interface SlMonitorRuntimeConfig {
   checkIntervalMs: number;
 }
 
+export interface ScannerDecisionRuntimeConfig {
+  technicalWeight: number;
+  marketRegimeWeight: number;
+  liquidityWeight: number;
+  volumeWeight: number;
+  trendWeight: number;
+  volatilityWeight: number;
+  sessionWeight: number;
+  riskRewardWeight: number;
+  minConfidence: number;
+  minLiquidityScore: number;
+  minSessionQuality: number;
+  minVolatilityScore: number;
+  maxVolatilityScore: number;
+  maxRiskGrade: "LOW" | "MEDIUM" | "HIGH" | "EXTREME";
+  gradeAPlusThreshold: number;
+  gradeAThreshold: number;
+  gradeBThreshold: number;
+  strategyTrendingBull: string;
+  strategyTrendingBear: string;
+  strategySideways: string;
+  strategyVolatile: string;
+  strategyCompression: string;
+  strategyExpansion: string;
+}
+
+export interface AIRuntimeConfig {
+  enabled: boolean;
+  modelName: string;
+  temperature: number;
+  maxTokens: number;
+  timeoutMs: number;
+  retryCount: number;
+  retryDelayMs: number;
+  cacheTtlMs: number;
+  rateLimitPerMinute: number;
+}
+
 export interface RuntimeConfig {
   scanner: ScannerRuntimeConfig;
   signal: SignalRuntimeConfig;
@@ -125,6 +163,8 @@ export interface RuntimeConfig {
   paperTrading: PaperTradingRuntimeConfig;
   priceTracker: PriceTrackerRuntimeConfig;
   slMonitor: SlMonitorRuntimeConfig;
+  scannerDecision: ScannerDecisionRuntimeConfig;
+  ai: AIRuntimeConfig;
 }
 
 export type RuntimeConfigValue = string | number | boolean | string[];

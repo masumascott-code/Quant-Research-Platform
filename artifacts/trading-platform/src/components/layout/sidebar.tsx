@@ -12,6 +12,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { useGetScannerStatus, getGetScannerStatusQueryKey } from "@workspace/api-client-react";
+import { useAuth } from "@/lib/auth";
 import {
   Activity,
   BarChart2,
@@ -21,15 +22,17 @@ import {
   Eye,
   FileText,
   LayoutDashboard,
+  LogOut,
   Settings,
-  Shield,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function AppSidebar() {
   const [location] = useLocation();
-  const { data: status } = useGetScannerStatus({
+  const { user, logout, canAccessRole } = useAuth();
+  const { data: status, isError: scannerStatusError } = useGetScannerStatus({
     query: {
       queryKey: getGetScannerStatusQueryKey(),
       refetchInterval: 15000,
@@ -40,38 +43,44 @@ export function AppSidebar() {
     {
       label: "Platform",
       items: [
-        { name: "Dashboard", path: "/", icon: LayoutDashboard },
-        { name: "Live Scanner", path: "/scanner", icon: Activity },
-        { name: "Top Gainers", path: "/gainers", icon: TrendingUp },
-        { name: "Top Losers", path: "/losers", icon: TrendingDown },
-        { name: "Signals", path: "/signals", icon: Crosshair },
+        { name: "Dashboard", path: "/", icon: LayoutDashboard, role: "viewer" },
+        { name: "Live Scanner", path: "/scanner", icon: Activity, role: "admin" },
+        { name: "Top Gainers", path: "/gainers", icon: TrendingUp, role: "admin" },
+        { name: "Top Losers", path: "/losers", icon: TrendingDown, role: "admin" },
+        { name: "Signals", path: "/signals", icon: Crosshair, role: "admin" },
       ],
     },
     {
       label: "Execution",
       items: [
-        { name: "Open Trades", path: "/trades/open", icon: Briefcase },
-        { name: "Trade Journal", path: "/trades/journal", icon: BookOpen },
-        { name: "Watchlist", path: "/watchlist", icon: Eye },
+        { name: "Open Trades", path: "/trades/open", icon: Briefcase, role: "admin" },
+        { name: "Trade Journal", path: "/trades/journal", icon: BookOpen, role: "admin" },
+        { name: "Watchlist", path: "/watchlist", icon: Eye, role: "viewer" },
       ],
     },
     {
       label: "Research",
       items: [
-        { name: "Analytics", path: "/analytics", icon: BarChart2 },
-        { name: "Learning Center", path: "/learning", icon: BookOpen },
-        { name: "Reports", path: "/reports", icon: FileText },
+        { name: "Analytics", path: "/analytics", icon: BarChart2, role: "viewer" },
+        { name: "Learning Center", path: "/learning", icon: BookOpen, role: "admin" },
+        { name: "Reports", path: "/reports", icon: FileText, role: "viewer" },
       ],
     },
     {
       label: "System",
       items: [
-        { name: "Admin Panel", path: "/admin", icon: Settings },
+        { name: "Admin Panel", path: "/admin", icon: Settings, role: "admin" },
       ],
     },
   ];
 
   const isRunning = status?.running;
+  const visibleRoutes = routes
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canAccessRole(item.role as "admin" | "viewer")),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <Sidebar variant="inset" className="border-r border-border">
@@ -90,7 +99,7 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        {routes.map((group) => (
+        {visibleRoutes.map((group) => (
           <SidebarGroup key={group.label}>
             <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground font-mono">
               {group.label}
@@ -125,18 +134,27 @@ export function AppSidebar() {
           <div className="text-xs font-mono text-muted-foreground">Scanner</div>
           <div className="flex items-center gap-1.5">
             <div
-              className={`h-2 w-2 rounded-full ${isRunning ? "bg-green-400 animate-pulse" : "bg-red-500"}`}
+              className={`h-2 w-2 rounded-full ${isRunning ? "bg-green-400 animate-pulse" : scannerStatusError ? "bg-yellow-500" : "bg-red-500"}`}
             />
             <span
-              className={`text-xs font-mono font-bold ${isRunning ? "text-green-400" : "text-red-400"}`}
+              className={`text-xs font-mono font-bold ${isRunning ? "text-green-400" : scannerStatusError ? "text-yellow-400" : "text-red-400"}`}
             >
-              {isRunning ? "LIVE" : "OFF"}
+              {isRunning ? "LIVE" : scannerStatusError ? "UNKNOWN" : "OFF"}
             </span>
           </div>
         </div>
         <div className="flex items-center justify-between">
           <div className="text-xs font-mono text-muted-foreground">Mode</div>
           <div className="text-xs font-mono text-primary font-bold">PAPER</div>
+        </div>
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <div className="min-w-0">
+            <div className="truncate text-xs font-mono text-foreground">{user?.username}</div>
+            <div className="text-[10px] font-mono uppercase text-muted-foreground">{user?.role}</div>
+          </div>
+          <Button variant="outline" size="sm" onClick={logout} className="h-8 px-2">
+            <LogOut className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </SidebarFooter>
     </Sidebar>

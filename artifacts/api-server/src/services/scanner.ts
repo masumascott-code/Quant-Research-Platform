@@ -9,6 +9,7 @@ import {
 import { eq, and, count, gte, desc, lt } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { configService, type RuntimeConfig, type ScannerRuntimeConfig } from "../core/config";
+import { scannerDecisionEngine } from "../core/scanner";
 import { tradeService } from "../core/trading";
 import { analyzeForLong, analyzeForShort, CandleData } from "./signal-engine";
 import { Telegram } from "./telegram";
@@ -193,47 +194,59 @@ export class ScannerService {
 
       const mtf = { m5: candles5m, h1: candlesH1, m1: [] };
 
-      // Check for existing active signal (avoid duplicates)
-      const existingSignal = await db.select().from(signalsTable)
-        .where(and(eq(signalsTable.symbol, symbol), eq(signalsTable.status, "active")));
-      if (existingSignal.length > 0) return;
-
       const analysis = direction === "LONG"
         ? analyzeForLong(symbol, candles15m, currentPrice, volume24h, mtf, runtimeConfig.signal)
         : analyzeForShort(symbol, candles15m, currentPrice, volume24h, mtf, runtimeConfig.signal);
 
       if (!analysis) return;
+      const decision = await scannerDecisionEngine.decide({
+        symbol,
+        direction,
+        candles: candles15m,
+        technicalSignal: analysis,
+      });
+      if (!decision.accepted) {
+        logger.info({ symbol, reasons: decision.reasons }, "Scanner decision rejected signal");
+        return;
+      }
+      const decisionAnalysis: any = {
+        ...analysis,
+        score: decision.finalScore,
+        grade: decision.signalGrade,
+        reason: `${analysis.reason} | Strategy:${decision.strategy} | Market:${decision.marketRegime} | Confidence:${decision.confidence.toFixed(1)} | Final:${decision.finalScore.toFixed(1)}`,
+        whyNow: `${analysis.whyNow} Market context: ${decision.marketRegime}, ${decision.context.session.session}, confidence ${decision.confidence.toFixed(1)}.`,
+      };
 
-      if (analysis.score >= config.minScoreTrade) {
+      if (decision.finalScore >= config.minScoreTrade) {
         // A/A+ signal — try to open a trade
         const canTrade = await this.checkTradingLimits();
         if (!canTrade) {
           // Save as signal but don't open trade
-          await this.saveSignal(symbol, analysis, "active");
+          await this.saveSignal(symbol, decisionAnalysis, "active");
           return;
         }
 
         if (!canOpenTrade) {
           logger.info({ symbol, reason: "risk manager paused" }, "Skipping trade — risk manager paused");
-          await this.saveSignal(symbol, analysis, "active");
+          await this.saveSignal(symbol, decisionAnalysis, "active");
           return;
         }
 
-        const newSignal = await this.saveSignal(symbol, analysis, "active");
+        const newSignal = await this.saveSignal(symbol, decisionAnalysis, "active");
         await Telegram.signalCreated({
-          symbol, direction: analysis.direction, score: analysis.score,
-          grade: analysis.grade!, confidence: analysis.confidence,
-          setupType: analysis.setupType,
-          entryPrice: analysis.entryPrice, stopLoss: analysis.stopLoss,
-          tp1: analysis.tp1, tp2: analysis.tp2, tp3: analysis.tp3,
-          rrRatio: analysis.rrRatio, reason: analysis.reason,
-          whyNow: analysis.whyNow, timeframeAlignment: analysis.timeframeAlignment,
+          symbol, direction: decisionAnalysis.direction, score: decisionAnalysis.score,
+          grade: decisionAnalysis.grade, confidence: decisionAnalysis.confidence,
+          setupType: decisionAnalysis.setupType,
+          entryPrice: decisionAnalysis.entryPrice, stopLoss: decisionAnalysis.stopLoss,
+          tp1: decisionAnalysis.tp1, tp2: decisionAnalysis.tp2, tp3: decisionAnalysis.tp3,
+          rrRatio: decisionAnalysis.rrRatio, reason: decisionAnalysis.reason,
+          whyNow: decisionAnalysis.whyNow, timeframeAlignment: decisionAnalysis.timeframeAlignment,
         });
-        await this.openPaperTrade(newSignal, analysis);
+        await this.openPaperTrade(newSignal, decisionAnalysis);
 
-      } else if (analysis.score >= config.minScoreWatchlist) {
+      } else if (decision.finalScore >= config.minScoreWatchlist) {
         // Near-miss — add to watchlist
-        await this.addToWatchlist(symbol, analysis);
+        await this.addToWatchlist(symbol, decisionAnalysis);
       }
 
     } catch (err) {
@@ -315,26 +328,43 @@ export class ScannerService {
           : analyzeForShort(item.symbol, candles15m, currentPrice, volume24h, mtf, runtimeConfig.signal);
 
         if (!analysis) continue;
+        const decision = await scannerDecisionEngine.decide({
+          symbol: item.symbol,
+          direction: item.direction as "LONG" | "SHORT",
+          candles: candles15m,
+          technicalSignal: analysis,
+        });
+        if (!decision.accepted) {
+          logger.info({ symbol: item.symbol, reasons: decision.reasons }, "Watchlist scanner decision rejected promotion");
+          continue;
+        }
+        const decisionAnalysis: any = {
+          ...analysis,
+          score: decision.finalScore,
+          grade: decision.signalGrade,
+          reason: `${analysis.reason} | Strategy:${decision.strategy} | Market:${decision.marketRegime} | Confidence:${decision.confidence.toFixed(1)} | Final:${decision.finalScore.toFixed(1)}`,
+          whyNow: `${analysis.whyNow} Market context: ${decision.marketRegime}, ${decision.context.session.session}, confidence ${decision.confidence.toFixed(1)}.`,
+        };
 
-        if (analysis.score >= config.minScoreTrade) {
+        if (decision.finalScore >= config.minScoreTrade) {
           // Promoted from watchlist!
           await db.update(watchlistTable).set({ isActive: false, promoted: true }).where(eq(watchlistTable.id, item.id));
-          logger.info({ symbol: item.symbol, score: analysis.score }, "Watchlist item promoted to signal");
+          logger.info({ symbol: item.symbol, score: decision.finalScore }, "Watchlist item promoted to signal");
 
           const riskCheck = await riskManager.canTrade();
           const canTrade = await this.checkTradingLimits();
           if (riskCheck.allowed && canTrade) {
-            const newSignal = await this.saveSignal(item.symbol, analysis, "active");
+            const newSignal = await this.saveSignal(item.symbol, decisionAnalysis, "active");
             await Telegram.signalCreated({
-              symbol: item.symbol, direction: analysis.direction, score: analysis.score,
-              grade: analysis.grade!, confidence: analysis.confidence,
-              setupType: analysis.setupType, entryPrice: analysis.entryPrice,
-              stopLoss: analysis.stopLoss, tp1: analysis.tp1, tp2: analysis.tp2, tp3: analysis.tp3,
-              rrRatio: analysis.rrRatio, reason: analysis.reason,
-              whyNow: `🔼 Promoted from Watchlist! ${analysis.whyNow}`,
-              timeframeAlignment: analysis.timeframeAlignment,
+              symbol: item.symbol, direction: decisionAnalysis.direction, score: decisionAnalysis.score,
+              grade: decisionAnalysis.grade, confidence: decisionAnalysis.confidence,
+              setupType: decisionAnalysis.setupType, entryPrice: decisionAnalysis.entryPrice,
+              stopLoss: decisionAnalysis.stopLoss, tp1: decisionAnalysis.tp1, tp2: decisionAnalysis.tp2, tp3: decisionAnalysis.tp3,
+              rrRatio: decisionAnalysis.rrRatio, reason: decisionAnalysis.reason,
+              whyNow: `🔼 Promoted from Watchlist! ${decisionAnalysis.whyNow}`,
+              timeframeAlignment: decisionAnalysis.timeframeAlignment,
             });
-            await this.openPaperTrade(newSignal, analysis);
+            await this.openPaperTrade(newSignal, decisionAnalysis);
           }
         }
         await sleep(config.watchlistCheckCooldownMs);

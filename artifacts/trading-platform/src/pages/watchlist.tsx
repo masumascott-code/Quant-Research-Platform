@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Eye, TrendingUp, TrendingDown, Clock, CheckCircle } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface WatchlistItem {
   id: number;
@@ -24,9 +25,7 @@ interface WatchlistItem {
 }
 
 async function fetchWatchlist() {
-  const res = await fetch(`${import.meta.env.BASE_URL}api/watchlist`);
-  if (!res.ok) throw new Error("Failed to fetch watchlist");
-  return res.json() as Promise<{ active: WatchlistItem[]; history: WatchlistItem[] }>;
+  return await apiFetch<{ active: WatchlistItem[]; history: WatchlistItem[] }>("api/watchlist");
 }
 
 function confidenceBadge(c: string) {

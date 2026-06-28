@@ -103,7 +103,39 @@ type ConfigPath =
   | "priceTracker.pollIntervalMs"
   | "priceTracker.symbolRefreshMs"
   | "priceTracker.fetchTimeoutMs"
-  | "slMonitor.checkIntervalMs";
+  | "slMonitor.checkIntervalMs"
+  | "scannerDecision.technicalWeight"
+  | "scannerDecision.marketRegimeWeight"
+  | "scannerDecision.liquidityWeight"
+  | "scannerDecision.volumeWeight"
+  | "scannerDecision.trendWeight"
+  | "scannerDecision.volatilityWeight"
+  | "scannerDecision.sessionWeight"
+  | "scannerDecision.riskRewardWeight"
+  | "scannerDecision.minConfidence"
+  | "scannerDecision.minLiquidityScore"
+  | "scannerDecision.minSessionQuality"
+  | "scannerDecision.minVolatilityScore"
+  | "scannerDecision.maxVolatilityScore"
+  | "scannerDecision.maxRiskGrade"
+  | "scannerDecision.gradeAPlusThreshold"
+  | "scannerDecision.gradeAThreshold"
+  | "scannerDecision.gradeBThreshold"
+  | "scannerDecision.strategyTrendingBull"
+  | "scannerDecision.strategyTrendingBear"
+  | "scannerDecision.strategySideways"
+  | "scannerDecision.strategyVolatile"
+  | "scannerDecision.strategyCompression"
+  | "scannerDecision.strategyExpansion"
+  | "ai.enabled"
+  | "ai.modelName"
+  | "ai.temperature"
+  | "ai.maxTokens"
+  | "ai.timeoutMs"
+  | "ai.retryCount"
+  | "ai.retryDelayMs"
+  | "ai.cacheTtlMs"
+  | "ai.rateLimitPerMinute";
 
 type ValueKind = "string" | "number" | "boolean" | "stringArray";
 
@@ -210,6 +242,38 @@ const CONFIG_VALUE_KINDS: Record<ConfigPath, ValueKind> = {
   "priceTracker.symbolRefreshMs": "number",
   "priceTracker.fetchTimeoutMs": "number",
   "slMonitor.checkIntervalMs": "number",
+  "scannerDecision.technicalWeight": "number",
+  "scannerDecision.marketRegimeWeight": "number",
+  "scannerDecision.liquidityWeight": "number",
+  "scannerDecision.volumeWeight": "number",
+  "scannerDecision.trendWeight": "number",
+  "scannerDecision.volatilityWeight": "number",
+  "scannerDecision.sessionWeight": "number",
+  "scannerDecision.riskRewardWeight": "number",
+  "scannerDecision.minConfidence": "number",
+  "scannerDecision.minLiquidityScore": "number",
+  "scannerDecision.minSessionQuality": "number",
+  "scannerDecision.minVolatilityScore": "number",
+  "scannerDecision.maxVolatilityScore": "number",
+  "scannerDecision.maxRiskGrade": "string",
+  "scannerDecision.gradeAPlusThreshold": "number",
+  "scannerDecision.gradeAThreshold": "number",
+  "scannerDecision.gradeBThreshold": "number",
+  "scannerDecision.strategyTrendingBull": "string",
+  "scannerDecision.strategyTrendingBear": "string",
+  "scannerDecision.strategySideways": "string",
+  "scannerDecision.strategyVolatile": "string",
+  "scannerDecision.strategyCompression": "string",
+  "scannerDecision.strategyExpansion": "string",
+  "ai.enabled": "boolean",
+  "ai.modelName": "string",
+  "ai.temperature": "number",
+  "ai.maxTokens": "number",
+  "ai.timeoutMs": "number",
+  "ai.retryCount": "number",
+  "ai.retryDelayMs": "number",
+  "ai.cacheTtlMs": "number",
+  "ai.rateLimitPerMinute": "number",
 };
 
 export const LEGACY_CONFIG_ALIASES: Record<string, ConfigPath> = {
@@ -242,6 +306,12 @@ export const LEGACY_CONFIG_ALIASES: Record<string, ConfigPath> = {
   slippage: "paperTrading.slippageRate",
   funding: "paperTrading.fundingRate",
   funding_interval_hours: "paperTrading.fundingIntervalHours",
+  ai_enabled: "ai.enabled",
+  ai_model_name: "ai.modelName",
+  ai_temperature: "ai.temperature",
+  ai_max_tokens: "ai.maxTokens",
+  ai_timeout_ms: "ai.timeoutMs",
+  ai_retry_count: "ai.retryCount",
 };
 
 function cloneDefaultConfig(): RuntimeConfig {
@@ -372,6 +442,15 @@ export class ConfigurationValidator {
     }
     if (config.signal.emaSlowPeriod > config.signal.emaTrendPeriod) {
       throw new Error("signal.emaSlowPeriod cannot exceed signal.emaTrendPeriod");
+    }
+    if (config.ai.temperature < 0 || config.ai.temperature > 2) {
+      throw new Error("ai.temperature must be between 0 and 2");
+    }
+    if (config.ai.maxTokens <= 0 || config.ai.timeoutMs <= 0 || config.ai.rateLimitPerMinute <= 0) {
+      throw new Error("AI runtime configuration values must be positive");
+    }
+    if (config.ai.retryCount < 0 || config.ai.retryDelayMs < 0 || config.ai.cacheTtlMs < 0) {
+      throw new Error("AI retry and cache configuration cannot be negative");
     }
 
     return config;
