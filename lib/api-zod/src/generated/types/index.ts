@@ -8,8 +8,13 @@
 
 export * from './actionResult';
 export * from './analyticsDashboard';
+export * from './authLoginResult';
+export * from './authLoginResultTokenType';
+export * from './authRole';
+export * from './authUser';
 export * from './closeTradeInput';
 export * from './coin';
+export * from './currentUserResponse';
 export * from './dailyPerformance';
 export * from './dailyReport';
 export * from './getDailyPerformanceParams';
@@ -27,6 +32,7 @@ export * from './getTradesStatus';
 export * from './healthStatus';
 export * from './hourlyStat';
 export * from './learningInsights';
+export * from './loginInput';
 export * from './marketSnapshot';
 export * from './paperTrade';
 export * from './paperTradeDirection';

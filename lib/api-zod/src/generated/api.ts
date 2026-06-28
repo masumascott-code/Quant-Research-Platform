@@ -17,6 +17,36 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Exchange username and password for a JWT
+ */
+export const LoginBody = zod.object({
+  "username": zod.string(),
+  "password": zod.string()
+})
+
+export const LoginResponse = zod.object({
+  "accessToken": zod.string(),
+  "tokenType": zod.enum(['Bearer']),
+  "expiresIn": zod.number(),
+  "user": zod.object({
+  "username": zod.string(),
+  "role": zod.enum(['admin', 'viewer'])
+})
+})
+
+
+/**
+ * @summary Get current authenticated user
+ */
+export const GetCurrentUserResponse = zod.object({
+  "user": zod.object({
+  "username": zod.string(),
+  "role": zod.enum(['admin', 'viewer'])
+})
+})
+
+
+/**
  * @summary Get scanner status
  */
 export const GetScannerStatusResponse = zod.object({

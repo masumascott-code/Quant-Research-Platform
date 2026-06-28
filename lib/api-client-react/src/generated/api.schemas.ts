@@ -9,6 +9,42 @@ export interface HealthStatus {
   status: string;
 }
 
+export type AuthRole = typeof AuthRole[keyof typeof AuthRole];
+
+
+export const AuthRole = {
+  admin: 'admin',
+  viewer: 'viewer',
+} as const;
+
+export interface AuthUser {
+  username: string;
+  role: AuthRole;
+}
+
+export interface LoginInput {
+  username: string;
+  password: string;
+}
+
+export type AuthLoginResultTokenType = typeof AuthLoginResultTokenType[keyof typeof AuthLoginResultTokenType];
+
+
+export const AuthLoginResultTokenType = {
+  Bearer: 'Bearer',
+} as const;
+
+export interface AuthLoginResult {
+  accessToken: string;
+  tokenType: AuthLoginResultTokenType;
+  expiresIn: number;
+  user: AuthUser;
+}
+
+export interface CurrentUserResponse {
+  user: AuthUser;
+}
+
 export interface ActionResult {
   success: boolean;
   message: string;
