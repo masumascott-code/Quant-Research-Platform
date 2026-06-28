@@ -2,6 +2,7 @@
   "name": "workspace",
   "version": "0.0.0",
   "license": "MIT",
+  "packageManager": "pnpm@10.34.4",
   "scripts": {
     "preinstall": "node scripts/ensure-pnpm.cjs",
     "dev": "powershell -ExecutionPolicy Bypass -File scripts/dev-local.ps1",

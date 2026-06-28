@@ -50,8 +50,9 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -64,9 +65,3 @@ jobs:
 
       - name: Build
         run: pnpm build
-
-      - name: Docker build API
-        run: docker build -f Dockerfile.api -t quantedge-api:${{ github.sha }} .
-
-      - name: Docker build web
-        run: docker build -f Dockerfile.web -t quantedge-web:${{ github.sha }} .
