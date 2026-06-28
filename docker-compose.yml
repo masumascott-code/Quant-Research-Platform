@@ -39,6 +39,21 @@ services:
       retries: 5
     logging: *json-logs
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      target: migrate
+    restart: "no"
+    env_file:
+      - .env.production
+    environment:
+      SERVICE_NAME: quantedge-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *json-logs
+
   api:
     build:
       context: .
@@ -54,6 +69,8 @@ services:
       SCHEDULER_IN_API_PROCESS: "false"
       TRUST_PROXY: "true"
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -87,6 +104,8 @@ services:
       REDIS_URL: redis://redis:6379
       WORKER_QUEUES: reports,maintenance,scanner
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -112,6 +131,8 @@ services:
       SERVICE_NAME: quantedge-scheduler
       REDIS_URL: redis://redis:6379
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:

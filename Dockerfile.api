@@ -17,6 +17,11 @@ COPY scripts/package.json scripts/package.json
 COPY scripts/ensure-pnpm.cjs scripts/ensure-pnpm.cjs
 RUN pnpm install --frozen-lockfile
 
+FROM deps AS migrate
+ENV NODE_ENV=production
+COPY lib/db ./lib/db
+CMD ["pnpm", "--filter", "@workspace/db", "run", "push"]
+
 FROM deps AS build
 COPY . .
 ENV NODE_ENV=production
