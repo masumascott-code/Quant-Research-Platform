@@ -8,6 +8,7 @@ import { rateLimit } from "./middleware/security";
 import { ScannerService } from "./services/scanner";
 import { PriceTracker } from "./services/price-tracker";
 import { SlMonitor } from "./services/sl-monitor";
+import { TelegramCommandBot } from "./services/telegram-command-bot";
 import { metricsMiddleware } from "./infra/metrics";
 import { requestContextMiddleware } from "./infra/request-context";
 import { scheduler } from "./infra/scheduler";
@@ -85,6 +86,10 @@ if (boolEnv("RUN_BACKGROUND_SERVICES", true)) {
 
     const tracker = PriceTracker.getInstance();
     tracker.start().catch(err => logger.error({ err }, "Failed to start price tracker"));
+
+    TelegramCommandBot.getInstance()
+      .start()
+      .catch(err => logger.error({ err }, "Failed to start Telegram command bot"));
 
     // Start SL/TP monitor after price tracker has had time to fetch initial prices
     setTimeout(() => {

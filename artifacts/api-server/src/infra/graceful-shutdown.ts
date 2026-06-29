@@ -3,6 +3,7 @@ import { pool } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { ScannerService } from "../services/scanner";
 import { SlMonitor } from "../services/sl-monitor";
+import { TelegramCommandBot } from "../services/telegram-command-bot";
 import { queueManager } from "./queue";
 
 export function installGracefulShutdown(server: Server): void {
@@ -25,6 +26,7 @@ export function installGracefulShutdown(server: Server): void {
     try {
       ScannerService.getInstance().stop();
       SlMonitor.getInstance().stop();
+      TelegramCommandBot.getInstance().stop();
       await queueManager.close();
       await new Promise<void>((resolve, reject) => {
         server.close((err) => (err ? reject(err) : resolve()));
