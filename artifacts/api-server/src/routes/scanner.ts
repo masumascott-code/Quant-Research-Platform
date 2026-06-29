@@ -138,12 +138,12 @@ router.get("/diagnostics", async (req, res) => {
   today.setHours(0, 0, 0, 0);
 
   try {
-    const [recentDecisions, todayDecisions] = await Promise.all([
+    const [recentDecisionCandidates, todayDecisions] = await Promise.all([
       db
         .select()
         .from(scannerDecisionsTable)
         .orderBy(desc(scannerDecisionsTable.createdAt))
-        .limit(limit),
+        .limit(Math.max(limit * 20, 200)),
       db
         .select()
         .from(scannerDecisionsTable)
@@ -155,6 +155,8 @@ router.get("/diagnostics", async (req, res) => {
     const rejectedToday = todayDecisions.filter((decision) => decision.decision === "REJECTED").length;
     const averageFinalScore = average(todayDecisions.map((decision) => Number(decision.finalScore)));
     const averageConfidence = average(todayDecisions.map((decision) => Number(decision.confidence)));
+    const todayCountsBySymbol = countBySymbol(todayDecisions);
+    const recentUniqueDecisions = uniqueLatestBySymbol(recentDecisionCandidates).slice(0, limit);
     const topRejectedReasons = countValues(
       todayDecisions
         .filter((decision) => decision.decision === "REJECTED")
@@ -174,7 +176,9 @@ router.get("/diagnostics", async (req, res) => {
         averageConfidence,
         topRejectedReasons,
       },
-      recentDecisions: recentDecisions.map(formatDecision),
+      recentDecisions: recentUniqueDecisions.map((decision) => (
+        formatDecision(decision, todayCountsBySymbol.get(decision.symbol) ?? 0)
+      )),
     });
   } catch (err) {
     logger.warn({ err }, "Scanner diagnostics decision store unavailable");
@@ -254,7 +258,7 @@ function formatSnapshot(s: any) {
   };
 }
 
-function formatDecision(decision: typeof scannerDecisionsTable.$inferSelect) {
+function formatDecision(decision: typeof scannerDecisionsTable.$inferSelect, scansToday = 0) {
   return {
     id: decision.id,
     symbol: decision.symbol,
@@ -269,8 +273,29 @@ function formatDecision(decision: typeof scannerDecisionsTable.$inferSelect) {
     riskGrade: decision.riskGrade,
     reasons: asStringArray(decision.reasons),
     riskSummary: asStringArray(decision.riskSummary),
+    scansToday,
     createdAt: decision.createdAt,
   };
+}
+
+function uniqueLatestBySymbol<T extends { symbol: string }>(rows: T[]): T[] {
+  const latestBySymbol = new Map<string, T>();
+  for (const row of rows) {
+    if (!latestBySymbol.has(row.symbol)) {
+      latestBySymbol.set(row.symbol, row);
+    }
+  }
+
+  return [...latestBySymbol.values()];
+}
+
+function countBySymbol(rows: Array<{ symbol: string }>): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    counts.set(row.symbol, (counts.get(row.symbol) ?? 0) + 1);
+  }
+
+  return counts;
 }
 
 function asStringArray(value: unknown): string[] {

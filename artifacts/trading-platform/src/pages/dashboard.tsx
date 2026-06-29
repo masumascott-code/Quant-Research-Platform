@@ -31,6 +31,7 @@ type ScannerDiagnosticDecision = {
   riskGrade: string;
   reasons: string[];
   riskSummary: string[];
+  scansToday: number;
   createdAt: string;
 };
 
@@ -395,6 +396,11 @@ function ScannerDiagnosticsPanel() {
                             <span className={`ml-2 text-xs ${decision.direction === "LONG" ? "text-success" : "text-destructive"}`}>
                               {decision.direction}
                             </span>
+                            {decision.scansToday > 1 && (
+                              <span className="ml-2 rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                x{decision.scansToday}
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Badge
