@@ -8,7 +8,7 @@ import {
   setupStatisticsTable,
   tradeReviewsTable,
 } from "@workspace/db";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import {
   aiInsightService,
   aiJournal,
@@ -151,6 +151,7 @@ class DatabaseAIReadModel implements AIReadModel {
   async dashboard(): Promise<AIDashboardPayload> {
     const context = await this.platformContext();
     const today = new Date().toISOString().slice(0, 10);
+    const opportunityFreshSince = new Date(Date.now() - 4 * 60 * 60 * 1000);
 
     const [
       todayRows,
@@ -171,7 +172,14 @@ class DatabaseAIReadModel implements AIReadModel {
       `),
       db.select().from(paperTradesTable).where(eq(paperTradesTable.status, "closed")).orderBy(desc(paperTradesTable.pnl)).limit(1),
       db.select().from(paperTradesTable).where(eq(paperTradesTable.status, "closed")).orderBy(sql`pnl::numeric ASC`).limit(1),
-      db.select().from(scannerDecisionsTable).orderBy(desc(scannerDecisionsTable.finalScore)).limit(5),
+      db.select()
+        .from(scannerDecisionsTable)
+        .where(and(
+          eq(scannerDecisionsTable.decision, "ACCEPTED"),
+          gte(scannerDecisionsTable.createdAt, opportunityFreshSince),
+        ))
+        .orderBy(desc(scannerDecisionsTable.finalScore))
+        .limit(5),
       db.select().from(tradeReviewsTable).orderBy(desc(tradeReviewsTable.createdAt)).limit(10),
     ]);
 
