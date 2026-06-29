@@ -165,6 +165,7 @@ export function useAIDashboard() {
   return useQuery({
     queryKey: ["ai", "dashboard"],
     queryFn: () => apiFetch<AIDashboardResponse>("/api/ai/dashboard"),
+    retry: false,
   });
 }
 
@@ -173,6 +174,7 @@ export function useAIMentor(question: string, symbol?: string, enabled = false) 
     queryKey: ["ai", "mentor", question, symbol],
     queryFn: () => apiFetch<AIMentorResponse>(`/api/ai/mentor?${query({ question, symbol })}`),
     enabled,
+    retry: false,
   });
 }
 
@@ -180,6 +182,7 @@ export function useAITradeReview(tradeId?: string) {
   return useQuery({
     queryKey: ["ai", "trade-review", tradeId],
     queryFn: () => apiFetch<AITradeReviewResponse>(`/api/ai/trade-review?${query({ tradeId })}`),
+    retry: false,
   });
 }
 
@@ -187,6 +190,7 @@ export function useAIDailyReport() {
   return useQuery({
     queryKey: ["ai", "daily-report"],
     queryFn: () => apiFetch<AIReportResponse>("/api/ai/daily-report"),
+    retry: false,
   });
 }
 
@@ -194,6 +198,7 @@ export function useAIWeeklyReport() {
   return useQuery({
     queryKey: ["ai", "weekly-report"],
     queryFn: () => apiFetch<AIReportResponse>("/api/ai/weekly-report"),
+    retry: false,
   });
 }
 
@@ -201,6 +206,7 @@ export function useAIJournal() {
   return useQuery({
     queryKey: ["ai", "journal"],
     queryFn: () => apiFetch<AIJournalResponse>("/api/ai/journal"),
+    retry: false,
   });
 }
 
@@ -208,6 +214,7 @@ export function useAIMarketSummary(symbol?: string) {
   return useQuery({
     queryKey: ["ai", "market-summary", symbol],
     queryFn: () => apiFetch<AIMarketSummaryResponse>(`/api/ai/market-summary?${query({ symbol })}`),
+    retry: false,
   });
 }
 
@@ -215,6 +222,7 @@ export function useAIStrategyReview() {
   return useQuery({
     queryKey: ["ai", "strategy-review"],
     queryFn: () => apiFetch<AIStrategyReviewResponse>("/api/ai/strategy-review"),
+    retry: false,
   });
 }
 

@@ -35,7 +35,7 @@ export function AIChatCard({ defaultQuestion = "" }: { defaultQuestion?: string 
   const [draft, setDraft] = useState(defaultQuestion);
   const [question, setQuestion] = useState(defaultQuestion);
   const [asked, setAsked] = useState(Boolean(defaultQuestion));
-  const { data, isFetching, isError, refetch } = useAIMentor(question, undefined, asked && question.length > 0);
+  const { data, isFetching, isError, error, refetch } = useAIMentor(question, undefined, asked && question.length > 0);
 
   function submit() {
     const next = draft.trim();
@@ -66,7 +66,7 @@ export function AIChatCard({ defaultQuestion = "" }: { defaultQuestion?: string 
           </Button>
         </div>
         {isError ? (
-          <ErrorPanel onRetry={() => refetch()} />
+          <ErrorPanel message={formatErrorMessage(error)} onRetry={() => refetch()} />
         ) : isFetching ? (
           <CardSkeleton lines={4} />
         ) : data?.insight ? (
@@ -465,12 +465,12 @@ function CardSkeleton({ lines = 3 }: { lines?: number }) {
   );
 }
 
-function ErrorPanel({ onRetry }: { onRetry?: () => void }) {
+function ErrorPanel({ message = "AI response unavailable.", onRetry }: { message?: string; onRetry?: () => void }) {
   return (
     <div className="flex flex-col gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
       <span className="flex items-center gap-2">
         <AlertCircle className="h-4 w-4" />
-        AI response unavailable.
+        {message}
       </span>
       {onRetry && (
         <Button size="sm" variant="outline" onClick={onRetry}>
@@ -480,6 +480,11 @@ function ErrorPanel({ onRetry }: { onRetry?: () => void }) {
       )}
     </div>
   );
+}
+
+function formatErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return "AI response unavailable.";
 }
 
 function EmptyPanel() {

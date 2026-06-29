@@ -78,11 +78,15 @@ export class GeminiProvider implements AIProvider {
         return await operation();
       } catch (error) {
         lastError = error;
+        if (this.isQuotaExhausted(error)) break;
         if (attempt >= config.retryCount || !this.isRetryable(error)) break;
         await sleep(config.retryDelayMs * (attempt + 1));
       }
     }
     logger.warn({ err: lastError }, "Gemini request failed");
+    if (this.isQuotaExhausted(lastError)) {
+      throw new AIProviderError("Gemini quota exhausted. AI responses are temporarily unavailable until quota resets or billing/quota is increased.", false, lastError);
+    }
     throw new AIProviderError("Gemini request failed", this.isRetryable(lastError), lastError);
   }
 
@@ -101,9 +105,16 @@ export class GeminiProvider implements AIProvider {
   }
 
   private isRetryable(error: unknown): boolean {
+    if (this.isQuotaExhausted(error)) return false;
     if (error instanceof AIProviderError) return error.retryable;
     const status = typeof error === "object" && error ? (error as { status?: unknown }).status : null;
     return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+  }
+
+  private isQuotaExhausted(error: unknown): boolean {
+    const status = typeof error === "object" && error ? (error as { status?: unknown }).status : null;
+    const message = error instanceof Error ? error.message : String(error ?? "");
+    return status === 429 && /quota|resource_exhausted/i.test(message);
   }
 }
 

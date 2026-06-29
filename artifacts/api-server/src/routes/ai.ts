@@ -16,6 +16,7 @@ import {
   aiReportService,
   ContextBuilder,
   type AIContext,
+  AIProviderError,
   type AIPromptTemplate,
   type ParsedAIInsight,
   type TradeContextSummary,
@@ -403,8 +404,10 @@ export function createAIRouter(services: AIRouteServices = defaultServices): Rou
 
   router.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const message = err instanceof Error ? err.message : "AI service failed";
-    res.status(503).json({
-      error: "AI service unavailable",
+    const quotaExhausted = err instanceof AIProviderError && /quota exhausted/i.test(message);
+
+    res.status(quotaExhausted ? 429 : 503).json({
+      error: quotaExhausted ? "AI quota exhausted" : "AI service unavailable",
       message,
       advisoryOnly: true,
     });
