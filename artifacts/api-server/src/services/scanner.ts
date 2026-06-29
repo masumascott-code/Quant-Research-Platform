@@ -134,7 +134,8 @@ export class ScannerService {
     const res = await fetch(url);
     if (!res.ok) return [];
     const raw = await res.json() as any[][];
-    return raw.map(c => ({
+    const now = Date.now();
+    return raw.filter(c => Number(c[6]) <= now).map(c => ({
       timestamp: c[0],
       open: Number(c[1]),
       high: Number(c[2]),

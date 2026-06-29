@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { systemSettingsTable, paperTradesTable, signalsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
-import { configService } from "../core/config";
+import { configService, ConfigurationValidator } from "../core/config";
 import { riskManager } from "../services/risk-manager";
 import { ScannerService } from "../services/scanner";
 
@@ -24,7 +24,29 @@ router.get("/settings", async (req, res) => {
 router.post("/settings", async (req, res) => {
   try {
     const { settings } = req.body as { settings: Record<string, string> };
+    const valuesToPersist = new Map<string, string>();
+    const canonicalValues = new Map<string, string>();
+
     for (const [key, value] of Object.entries(settings)) {
+      valuesToPersist.set(key, value);
+      const normalized = ConfigurationValidator.normalizeEntry(key, value);
+      if (normalized && normalized.key === key) {
+        canonicalValues.set(normalized.key, normalized.value);
+      }
+    }
+
+    for (const [key, value] of Object.entries(settings)) {
+      const normalized = ConfigurationValidator.normalizeEntry(key, value);
+      if (normalized && normalized.key !== key) {
+        canonicalValues.set(normalized.key, normalized.value);
+      }
+    }
+
+    for (const [key, value] of canonicalValues) {
+      valuesToPersist.set(key, value);
+    }
+
+    for (const [key, value] of valuesToPersist) {
       await db.insert(systemSettingsTable)
         .values({ key, value })
         .onConflictDoUpdate({

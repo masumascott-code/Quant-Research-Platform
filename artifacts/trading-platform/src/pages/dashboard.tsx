@@ -7,12 +7,49 @@ import {
   getGetScannerStatusQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Activity, TrendingUp, TrendingDown, Target, Briefcase, DollarSign, Zap, Shield, Wallet, Landmark } from "lucide-react";
+import { Activity, TrendingUp, TrendingDown, Target, Briefcase, DollarSign, Zap, Shield, Wallet, Landmark, Radar, TimerReset } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useLivePrices } from "@/hooks/use-live-prices";
 import { useEffect, useRef, useState } from "react";
 import { isUnauthorizedError } from "@/lib/auth";
+import { apiFetch } from "@/lib/api-fetch";
+import { useQuery } from "@tanstack/react-query";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+type ScannerDiagnosticDecision = {
+  id: number;
+  symbol: string;
+  direction: string;
+  decision: "ACCEPTED" | "REJECTED" | string;
+  strategy: string;
+  finalScore: number;
+  technicalScore: number;
+  confidence: number;
+  marketRegime: string;
+  opportunityRank: number | null;
+  riskGrade: string;
+  reasons: string[];
+  riskSummary: string[];
+  createdAt: string;
+};
+
+type ScannerDiagnostics = {
+  running: boolean;
+  lastScanAt: string | null;
+  nextScanIn: number | null;
+  diagnosticsAvailable?: boolean;
+  message?: string;
+  today: {
+    totalDecisions: number;
+    accepted: number;
+    rejected: number;
+    averageFinalScore: number;
+    averageConfidence: number;
+    topRejectedReasons: Array<{ reason: string; count: number }>;
+  };
+  recentDecisions: ScannerDiagnosticDecision[];
+};
 
 export default function Dashboard() {
   const { data: dashboard, isLoading, isError: dashboardError, error: dashboardQueryError } = useGetScannerDashboard({
@@ -159,6 +196,8 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <ScannerDiagnosticsPanel />
     </div>
   );
 }
@@ -269,6 +308,199 @@ function LivePositionCard({ trade, livePrices }: { trade: any; livePrices: Recor
       )}
     </div>
   );
+}
+
+function ScannerDiagnosticsPanel() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["scanner-diagnostics", { limit: 12 }],
+    queryFn: () => apiFetch<ScannerDiagnostics>("/api/scanner/diagnostics?limit=12"),
+    refetchInterval: 15000,
+  });
+
+  const latestDecision = data?.recentDecisions[0];
+  const latestReason = latestDecision?.reasons[0] ?? latestDecision?.riskSummary[0] ?? "---";
+
+  return (
+    <Card className="border-border bg-card/50">
+      <CardHeader className="pb-3 border-b border-border/50">
+        <CardTitle className="text-sm font-mono text-muted-foreground uppercase flex items-center gap-2">
+          <Radar className="h-4 w-4 text-primary" />
+          Scanner Diagnostics
+          {data?.running && (
+            <span className="ml-auto flex items-center gap-1 text-success text-xs">
+              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+              LIVE
+            </span>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        {isError ? (
+          <div className="h-[220px] flex items-center justify-center font-mono text-sm text-muted-foreground">
+            DIAGNOSTICS UNAVAILABLE
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-px bg-border/60">
+              <DiagnosticStat label="Decisions Today" value={data?.today.totalDecisions.toString() ?? "---"} loading={isLoading} />
+              <DiagnosticStat label="Accepted" value={data?.today.accepted.toString() ?? "---"} valueClassName="text-success" loading={isLoading} />
+              <DiagnosticStat label="Rejected" value={data?.today.rejected.toString() ?? "---"} valueClassName="text-destructive" loading={isLoading} />
+              <DiagnosticStat label="Avg Score" value={formatScore(data?.today.averageFinalScore)} loading={isLoading} />
+              <DiagnosticStat label="Next Scan" value={data?.nextScanIn == null ? "---" : `${data.nextScanIn}s`} loading={isLoading} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-0">
+              <div className="min-w-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-border hover:bg-transparent">
+                      <TableHead className="font-mono text-xs text-muted-foreground">TIME</TableHead>
+                      <TableHead className="font-mono text-xs text-muted-foreground">SYMBOL</TableHead>
+                      <TableHead className="font-mono text-xs text-muted-foreground">DECISION</TableHead>
+                      <TableHead className="font-mono text-xs text-muted-foreground text-right">SCORE</TableHead>
+                      <TableHead className="font-mono text-xs text-muted-foreground">REASON</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      Array.from({ length: 5 }).map((_, i) => (
+                        <TableRow key={i} className="border-border">
+                          <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-12 ml-auto" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-full" /></TableCell>
+                        </TableRow>
+                      ))
+                    ) : data?.diagnosticsAvailable === false ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground font-mono text-sm">
+                          DECISION HISTORY UNAVAILABLE
+                        </TableCell>
+                      </TableRow>
+                    ) : data?.recentDecisions.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground font-mono text-sm">
+                          NO SCANNER DECISIONS RECORDED
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      data?.recentDecisions.map((decision) => (
+                        <TableRow key={decision.id} className="border-border hover:bg-muted/50">
+                          <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                            {formatTime(decision.createdAt)}
+                          </TableCell>
+                          <TableCell className="font-mono font-bold whitespace-nowrap">
+                            <span>{decision.symbol}</span>
+                            <span className={`ml-2 text-xs ${decision.direction === "LONG" ? "text-success" : "text-destructive"}`}>
+                              {decision.direction}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={decision.decision === "ACCEPTED" ? "default" : "outline"}
+                              className={`font-mono ${decision.decision === "ACCEPTED" ? "bg-success text-success-foreground" : "text-muted-foreground"}`}
+                            >
+                              {decision.decision}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-mono text-right">
+                            {decision.finalScore.toFixed(1)}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground max-w-[360px]">
+                            <span className="line-clamp-1">
+                              {decision.reasons[0] ?? decision.riskSummary[0] ?? "---"}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="border-t lg:border-t-0 lg:border-l border-border p-4 space-y-4">
+                <div>
+                  <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground uppercase">
+                    <TimerReset className="h-3.5 w-3.5" />
+                    Latest Scan Readout
+                  </div>
+                  <div className="mt-3 rounded-md border border-border bg-muted/20 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold">{latestDecision?.symbol ?? "---"}</span>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {latestDecision ? formatTime(latestDecision.createdAt) : "---"}
+                      </span>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs font-mono">
+                      <span className="text-muted-foreground">Strategy</span>
+                      <span className="text-right">{latestDecision?.strategy ?? "---"}</span>
+                      <span className="text-muted-foreground">Regime</span>
+                      <span className="text-right">{latestDecision?.marketRegime ?? "---"}</span>
+                      <span className="text-muted-foreground">Confidence</span>
+                      <span className="text-right">{formatScore(latestDecision?.confidence)}</span>
+                      <span className="text-muted-foreground">Risk Grade</span>
+                      <span className="text-right">{latestDecision?.riskGrade ?? "---"}</span>
+                    </div>
+                    <p className="mt-3 text-xs text-muted-foreground leading-relaxed">
+                      {data?.message ?? latestReason}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="font-mono text-xs text-muted-foreground uppercase">Top Reject Reasons</div>
+                  <div className="mt-2 space-y-2">
+                    {data?.today.topRejectedReasons.length ? (
+                      data.today.topRejectedReasons.map((item) => (
+                        <div key={item.reason} className="flex items-center justify-between gap-3 text-xs">
+                          <span className="text-muted-foreground line-clamp-1">{item.reason}</span>
+                          <span className="font-mono text-destructive">{item.count}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-xs text-muted-foreground">No rejected decisions today.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function DiagnosticStat({
+  label,
+  value,
+  valueClassName = "",
+  loading,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+  loading: boolean;
+}) {
+  return (
+    <div className="bg-card p-4 min-h-[82px]">
+      <div className="text-[10px] uppercase text-muted-foreground font-mono">{label}</div>
+      {loading ? (
+        <Skeleton className="mt-3 h-6 w-16" />
+      ) : (
+        <div className={`mt-2 font-mono text-xl font-bold ${valueClassName}`}>{value}</div>
+      )}
+    </div>
+  );
+}
+
+function formatScore(value?: number): string {
+  return value == null || !Number.isFinite(value) ? "---" : value.toFixed(1);
+}
+
+function formatTime(value?: string | null): string {
+  return value ? new Date(value).toLocaleTimeString() : "---";
 }
 
 function StatusRow({ label, status, ok }: { label: string; status: string; ok: boolean }) {

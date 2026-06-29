@@ -361,6 +361,15 @@ export class ConfigurationValidator {
     return LEGACY_CONFIG_ALIASES[key] ?? null;
   }
 
+  static normalizeEntry(rawKey: string, rawValue: string): { key: ConfigPath; value: string } | null {
+    const key = this.normalizeKey(rawKey);
+    if (!key) return null;
+    const value = rawKey === "scan_interval_seconds"
+      ? String(Number(rawValue) * 1000)
+      : rawValue;
+    return { key, value };
+  }
+
   static defaults(): RuntimeConfig {
     return cloneDefaultConfig();
   }
@@ -390,12 +399,11 @@ export class ConfigurationValidator {
 
     for (const [rawKey, rawValue] of Object.entries(rawValues)) {
       if (rawValue == null || rawValue.trim() === "") continue;
-      const key = this.normalizeKey(rawKey);
-      if (!key) continue;
+      const normalized = this.normalizeEntry(rawKey, rawValue);
+      if (!normalized) continue;
+      const { key } = normalized;
       const kind = CONFIG_VALUE_KINDS[key];
-      const value = rawKey === "scan_interval_seconds"
-        ? coerceValue(String(Number(rawValue) * 1000), kind)
-        : coerceValue(rawValue, kind);
+      const value = coerceValue(normalized.value, kind);
       if (value == null) continue;
       setPath(config, key, value);
     }

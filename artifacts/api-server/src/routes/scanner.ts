@@ -5,11 +5,13 @@ import {
   marketSnapshotsTable,
   signalsTable,
   paperTradesTable,
+  scannerDecisionsTable,
 } from "@workspace/db";
 import { eq, desc, sql, and, gte, count, sum } from "drizzle-orm";
 import { configService } from "../core/config";
 import { portfolioService } from "../core/portfolio";
 import { ScannerService } from "../services/scanner";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -127,6 +129,67 @@ router.get("/coins", async (req, res) => {
   })));
 });
 
+router.get("/diagnostics", async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), 50);
+  const scanner = ScannerService.getInstance();
+  const status = scanner.getStatus();
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  try {
+    const [recentDecisions, todayDecisions] = await Promise.all([
+      db
+        .select()
+        .from(scannerDecisionsTable)
+        .orderBy(desc(scannerDecisionsTable.createdAt))
+        .limit(limit),
+      db
+        .select()
+        .from(scannerDecisionsTable)
+        .where(gte(scannerDecisionsTable.createdAt, today))
+        .orderBy(desc(scannerDecisionsTable.createdAt)),
+    ]);
+
+    const acceptedToday = todayDecisions.filter((decision) => decision.decision === "ACCEPTED").length;
+    const rejectedToday = todayDecisions.filter((decision) => decision.decision === "REJECTED").length;
+    const averageFinalScore = average(todayDecisions.map((decision) => Number(decision.finalScore)));
+    const averageConfidence = average(todayDecisions.map((decision) => Number(decision.confidence)));
+    const topRejectedReasons = countValues(
+      todayDecisions
+        .filter((decision) => decision.decision === "REJECTED")
+        .flatMap((decision) => asStringArray(decision.reasons))
+    );
+
+    res.json({
+      running: status.running,
+      lastScanAt: status.lastScanAt,
+      nextScanIn: status.nextScanIn,
+      diagnosticsAvailable: true,
+      today: {
+        totalDecisions: todayDecisions.length,
+        accepted: acceptedToday,
+        rejected: rejectedToday,
+        averageFinalScore,
+        averageConfidence,
+        topRejectedReasons,
+      },
+      recentDecisions: recentDecisions.map(formatDecision),
+    });
+  } catch (err) {
+    logger.warn({ err }, "Scanner diagnostics decision store unavailable");
+    res.json({
+      running: status.running,
+      lastScanAt: status.lastScanAt,
+      nextScanIn: status.nextScanIn,
+      diagnosticsAvailable: false,
+      today: emptyDiagnosticsSummary(),
+      recentDecisions: [],
+      message: "Scanner decision history is unavailable. Run database migrations to enable full diagnostics.",
+    });
+  }
+});
+
 router.get("/dashboard", async (req, res) => {
   const scanner = ScannerService.getInstance();
   const status = scanner.getStatus();
@@ -188,6 +251,60 @@ function formatSnapshot(s: any) {
     atr14: s.atr14 ? Number(s.atr14) : null,
     trend: s.trend,
     scannedAt: s.scannedAt,
+  };
+}
+
+function formatDecision(decision: typeof scannerDecisionsTable.$inferSelect) {
+  return {
+    id: decision.id,
+    symbol: decision.symbol,
+    direction: decision.direction,
+    decision: decision.decision,
+    strategy: decision.strategy,
+    finalScore: Number(decision.finalScore),
+    technicalScore: Number(decision.technicalScore),
+    confidence: Number(decision.confidence),
+    marketRegime: decision.marketRegime,
+    opportunityRank: decision.opportunityRank == null ? null : Number(decision.opportunityRank),
+    riskGrade: decision.riskGrade,
+    reasons: asStringArray(decision.reasons),
+    riskSummary: asStringArray(decision.riskSummary),
+    createdAt: decision.createdAt,
+  };
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function average(values: number[]): number {
+  const numericValues = values.filter((value) => Number.isFinite(value));
+  if (numericValues.length === 0) return 0;
+  return numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length;
+}
+
+function countValues(values: string[]): Array<{ reason: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([reason, count]) => ({ reason, count }));
+}
+
+function emptyDiagnosticsSummary() {
+  return {
+    totalDecisions: 0,
+    accepted: 0,
+    rejected: 0,
+    averageFinalScore: 0,
+    averageConfidence: 0,
+    topRejectedReasons: [],
   };
 }
 
