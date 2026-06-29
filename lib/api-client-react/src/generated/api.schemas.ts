@@ -72,6 +72,15 @@ export interface ScannerDashboard {
   todayPnl: number;
   totalPnl: number;
   winRate: number;
+  portfolio?: {
+    currency: string;
+    equity: number;
+    availableBalance: number;
+    usedMargin: number;
+    freeMargin: number;
+    openExposure: number;
+    riskUsagePercent: number;
+  };
   /** @nullable */
   lastScanAt?: string | null;
 }
@@ -448,4 +457,3 @@ days?: number;
 export type GetTradeReviewsParams = {
 limit?: number;
 };
-

@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { eq, desc, sql, and, gte, count, sum } from "drizzle-orm";
 import { configService } from "../core/config";
+import { portfolioService } from "../core/portfolio";
 import { ScannerService } from "../services/scanner";
 
 const router = Router();
@@ -133,7 +134,7 @@ router.get("/dashboard", async (req, res) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const [totalCoins, gainersCount, losersCount, activeSignals, openTrades, todayPerf, allTrades] = await Promise.all([
+  const [totalCoins, gainersCount, losersCount, activeSignals, openTrades, todayPerf, allTrades, portfolio] = await Promise.all([
     db.select({ count: count() }).from(coinsTable).where(eq(coinsTable.isActive, true)),
     db.select({ count: count() }).from(marketSnapshotsTable).where(eq(marketSnapshotsTable.listType, "gainer")),
     db.select({ count: count() }).from(marketSnapshotsTable).where(eq(marketSnapshotsTable.listType, "loser")),
@@ -141,6 +142,7 @@ router.get("/dashboard", async (req, res) => {
     db.select({ count: count() }).from(paperTradesTable).where(eq(paperTradesTable.status, "open")),
     db.select({ pnl: sum(paperTradesTable.pnl) }).from(paperTradesTable).where(and(eq(paperTradesTable.status, "closed"), gte(paperTradesTable.closedAt, today))),
     db.select({ pnl: sum(paperTradesTable.pnl), wins: count() }).from(paperTradesTable).where(eq(paperTradesTable.status, "closed")),
+    portfolioService.getSummary(),
   ]);
 
   const closedCount = await db.select({ count: count() }).from(paperTradesTable).where(eq(paperTradesTable.status, "closed"));
@@ -159,6 +161,15 @@ router.get("/dashboard", async (req, res) => {
     todayPnl: todayPerf[0]?.pnl ? Number(todayPerf[0].pnl) : 0,
     totalPnl,
     winRate,
+    portfolio: {
+      currency: portfolio.currency,
+      equity: portfolio.equity,
+      availableBalance: portfolio.availableBalance,
+      usedMargin: portfolio.usedMargin,
+      freeMargin: portfolio.freeMargin,
+      openExposure: portfolio.openExposure,
+      riskUsagePercent: portfolio.riskUsagePercent,
+    },
     lastScanAt: status.lastScanAt,
   });
 });

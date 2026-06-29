@@ -159,6 +159,15 @@ export const GetScannerDashboardResponse = zod.object({
   "todayPnl": zod.number(),
   "totalPnl": zod.number(),
   "winRate": zod.number(),
+  "portfolio": zod.object({
+    "currency": zod.string(),
+    "equity": zod.number(),
+    "availableBalance": zod.number(),
+    "usedMargin": zod.number(),
+    "freeMargin": zod.number(),
+    "openExposure": zod.number(),
+    "riskUsagePercent": zod.number()
+  }).optional(),
   "lastScanAt": zod.string().nullish()
 })
 
@@ -780,5 +789,4 @@ export const GetWeeklyReportResponse = zod.object({
   "summary": zod.string(),
   "improvements": zod.array(zod.string())
 })
-
 

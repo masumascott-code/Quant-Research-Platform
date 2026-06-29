@@ -7,7 +7,7 @@ import {
   getGetScannerStatusQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Activity, TrendingUp, TrendingDown, Target, Briefcase, DollarSign, Zap, Shield } from "lucide-react";
+import { Activity, TrendingUp, TrendingDown, Target, Briefcase, DollarSign, Zap, Shield, Wallet, Landmark } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useLivePrices } from "@/hooks/use-live-prices";
@@ -79,6 +79,9 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard title="Paper Equity" value={formatCurrency(dashboard?.portfolio?.equity, dashboard?.portfolio?.currency)} icon={Wallet} loading={isLoading} />
+        <StatCard title="Available Balance" value={formatCurrency(dashboard?.portfolio?.availableBalance, dashboard?.portfolio?.currency)} icon={Landmark} loading={isLoading} />
+        <StatCard title="Used Margin" value={formatCurrency(dashboard?.portfolio?.usedMargin, dashboard?.portfolio?.currency)} icon={Shield} loading={isLoading} />
         <StatCard title="Daily PnL" value={dashboard?.todayPnl != null ? `$${dashboard.todayPnl.toFixed(2)}` : '---'} icon={DollarSign} valueColor={dashboard && dashboard.todayPnl > 0 ? "text-success" : dashboard && dashboard.todayPnl < 0 ? "text-destructive" : ""} loading={isLoading} />
         <StatCard title="Total PnL" value={dashboard?.totalPnl != null ? `$${dashboard.totalPnl.toFixed(2)}` : '---'} icon={Activity} valueColor={dashboard && dashboard.totalPnl > 0 ? "text-success" : dashboard && dashboard.totalPnl < 0 ? "text-destructive" : ""} loading={isLoading} />
         <StatCard title="Win Rate" value={dashboard?.winRate != null ? `${(dashboard.winRate * 100).toFixed(1)}%` : '---'} icon={Target} loading={isLoading} />
@@ -158,6 +161,10 @@ export default function Dashboard() {
       </div>
     </div>
   );
+}
+
+function formatCurrency(value?: number, currency = "USDT"): string {
+  return value == null ? "---" : `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency}`;
 }
 
 function LivePositionCard({ trade, livePrices }: { trade: any; livePrices: Record<string, any> }) {
