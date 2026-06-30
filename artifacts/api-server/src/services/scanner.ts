@@ -347,15 +347,28 @@ export class ScannerService {
           whyNow: `${analysis.whyNow} Market context: ${decision.marketRegime}, ${decision.context.session.session}, confidence ${decision.confidence.toFixed(1)}.`,
         };
 
+        await db.update(watchlistTable).set({
+          score: String(decision.finalScore),
+          confidence: decisionAnalysis.confidence,
+          setupType: decisionAnalysis.setupType,
+          entryPrice: String(decisionAnalysis.entryPrice),
+          stopLoss: String(decisionAnalysis.stopLoss),
+          tp1: String(decisionAnalysis.tp1),
+          tp2: String(decisionAnalysis.tp2),
+          tp3: String(decisionAnalysis.tp3),
+          rrRatio: String(decisionAnalysis.rrRatio),
+          reason: decisionAnalysis.reason,
+        }).where(eq(watchlistTable.id, item.id));
+
         if (decision.finalScore >= config.minScoreTrade) {
           // Promoted from watchlist!
           await db.update(watchlistTable).set({ isActive: false, promoted: true }).where(eq(watchlistTable.id, item.id));
           logger.info({ symbol: item.symbol, score: decision.finalScore }, "Watchlist item promoted to signal");
 
+          const newSignal = await this.saveSignal(item.symbol, decisionAnalysis, "active");
           const riskCheck = await riskManager.canTrade();
           const canTrade = await this.checkTradingLimits();
           if (riskCheck.allowed && canTrade) {
-            const newSignal = await this.saveSignal(item.symbol, decisionAnalysis, "active");
             await Telegram.signalCreated({
               symbol: item.symbol, direction: decisionAnalysis.direction, score: decisionAnalysis.score,
               grade: decisionAnalysis.grade, confidence: decisionAnalysis.confidence,
