@@ -485,13 +485,13 @@ function ScannerDiagnosticsPanel() {
                       </span>
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-2 text-xs font-mono">
-                      <span className="text-muted-foreground">Strategy</span>
+                      <span className="text-muted-foreground">{showScanActivity ? "Mode" : "Strategy"}</span>
                       <span className="text-right">{showScanActivity ? "Market Scan" : latestDecision?.strategy ?? "---"}</span>
-                      <span className="text-muted-foreground">Regime</span>
+                      <span className="text-muted-foreground">{showScanActivity ? "List" : "Regime"}</span>
                       <span className="text-right">{showScanActivity ? latestSnapshot?.listType.toUpperCase() : latestDecision?.marketRegime ?? "---"}</span>
-                      <span className="text-muted-foreground">Confidence</span>
+                      <span className="text-muted-foreground">{showScanActivity ? "Change" : "Confidence"}</span>
                       <span className="text-right">{showScanActivity ? `${formatScore(latestSnapshot?.priceChangePercent)}%` : formatScore(latestDecision?.confidence)}</span>
-                      <span className="text-muted-foreground">Risk Grade</span>
+                      <span className="text-muted-foreground">{showScanActivity ? "Rank" : "Risk Grade"}</span>
                       <span className="text-right">{showScanActivity ? `Rank #${latestSnapshot?.rank ?? "---"}` : latestDecision?.riskGrade ?? "---"}</span>
                     </div>
                     <p className="mt-3 text-xs text-muted-foreground leading-relaxed">
