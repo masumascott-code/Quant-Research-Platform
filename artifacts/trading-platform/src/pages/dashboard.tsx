@@ -35,10 +35,26 @@ type ScannerDiagnosticDecision = {
   createdAt: string;
 };
 
+type ScannerDiagnosticSnapshot = {
+  id: number;
+  symbol: string;
+  price: number;
+  priceChangePercent: number;
+  volume24h: number;
+  rvol: number;
+  rank: number;
+  listType: "gainer" | "loser" | string;
+  scannedAt: string;
+};
+
 type ScannerDiagnostics = {
   running: boolean;
   lastScanAt: string | null;
   nextScanIn: number | null;
+  scanActivity?: {
+    latestSnapshotAt: string | null;
+    snapshotsLast10m: number;
+  };
   diagnosticsAvailable?: boolean;
   message?: string;
   today: {
@@ -50,6 +66,7 @@ type ScannerDiagnostics = {
     topRejectedReasons: Array<{ reason: string; count: number }>;
   };
   recentDecisions: ScannerDiagnosticDecision[];
+  recentSnapshots?: ScannerDiagnosticSnapshot[];
 };
 
 export default function Dashboard() {
@@ -319,6 +336,8 @@ function ScannerDiagnosticsPanel() {
   });
 
   const latestDecision = data?.recentDecisions[0];
+  const latestSnapshot = data?.recentSnapshots?.[0];
+  const showScanActivity = !isLoading && (data?.today.totalDecisions ?? 0) === 0 && !!latestSnapshot;
   const latestReason = latestDecision?.reasons[0] ?? latestDecision?.riskSummary[0] ?? "---";
 
   return (
@@ -379,6 +398,33 @@ function ScannerDiagnosticsPanel() {
                           DECISION HISTORY UNAVAILABLE
                         </TableCell>
                       </TableRow>
+                    ) : showScanActivity ? (
+                      data?.recentSnapshots?.map((snapshot) => (
+                        <TableRow key={snapshot.id} className="border-border hover:bg-muted/50">
+                          <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                            {formatTime(snapshot.scannedAt)}
+                          </TableCell>
+                          <TableCell className="font-mono font-bold whitespace-nowrap">
+                            <span>{snapshot.symbol}</span>
+                            <span className={`ml-2 text-xs ${snapshot.listType === "gainer" ? "text-success" : "text-destructive"}`}>
+                              {snapshot.listType.toUpperCase()}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="font-mono text-muted-foreground">
+                              SCANNED
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-mono text-right">
+                            {snapshot.priceChangePercent.toFixed(1)}%
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground max-w-[360px]">
+                            <span className="line-clamp-1">
+                              Rank #{snapshot.rank} at {formatPrice(snapshot.price)} with {formatVolume(snapshot.volume24h)} 24h volume
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))
                     ) : data?.recentDecisions.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center py-8 text-muted-foreground font-mono text-sm">
@@ -433,23 +479,25 @@ function ScannerDiagnosticsPanel() {
                   </div>
                   <div className="mt-3 rounded-md border border-border bg-muted/20 p-3">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold">{latestDecision?.symbol ?? "---"}</span>
+                      <span className="font-mono font-bold">{showScanActivity ? latestSnapshot?.symbol : latestDecision?.symbol ?? "---"}</span>
                       <span className="font-mono text-xs text-muted-foreground">
-                        {latestDecision ? formatTime(latestDecision.createdAt) : "---"}
+                        {showScanActivity ? formatTime(latestSnapshot?.scannedAt) : latestDecision ? formatTime(latestDecision.createdAt) : "---"}
                       </span>
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-2 text-xs font-mono">
                       <span className="text-muted-foreground">Strategy</span>
-                      <span className="text-right">{latestDecision?.strategy ?? "---"}</span>
+                      <span className="text-right">{showScanActivity ? "Market Scan" : latestDecision?.strategy ?? "---"}</span>
                       <span className="text-muted-foreground">Regime</span>
-                      <span className="text-right">{latestDecision?.marketRegime ?? "---"}</span>
+                      <span className="text-right">{showScanActivity ? latestSnapshot?.listType.toUpperCase() : latestDecision?.marketRegime ?? "---"}</span>
                       <span className="text-muted-foreground">Confidence</span>
-                      <span className="text-right">{formatScore(latestDecision?.confidence)}</span>
+                      <span className="text-right">{showScanActivity ? `${formatScore(latestSnapshot?.priceChangePercent)}%` : formatScore(latestDecision?.confidence)}</span>
                       <span className="text-muted-foreground">Risk Grade</span>
-                      <span className="text-right">{latestDecision?.riskGrade ?? "---"}</span>
+                      <span className="text-right">{showScanActivity ? `Rank #${latestSnapshot?.rank ?? "---"}` : latestDecision?.riskGrade ?? "---"}</span>
                     </div>
                     <p className="mt-3 text-xs text-muted-foreground leading-relaxed">
-                      {data?.message ?? latestReason}
+                      {data?.message ?? (showScanActivity && latestSnapshot
+                        ? `Latest market scan snapshot recorded ${data?.scanActivity?.snapshotsLast10m ?? 0} snapshots in the last 10 minutes.`
+                        : latestReason)}
                     </p>
                   </div>
                 </div>
@@ -503,6 +551,16 @@ function DiagnosticStat({
 
 function formatScore(value?: number): string {
   return value == null || !Number.isFinite(value) ? "---" : value.toFixed(1);
+}
+
+function formatPrice(value?: number): string {
+  if (value == null || !Number.isFinite(value)) return "---";
+  return value >= 1 ? value.toFixed(2) : value.toPrecision(4);
+}
+
+function formatVolume(value?: number): string {
+  if (value == null || !Number.isFinite(value)) return "---";
+  return Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
 
 function formatTime(value?: string | null): string {

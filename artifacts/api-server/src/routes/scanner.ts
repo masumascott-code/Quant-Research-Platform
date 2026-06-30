@@ -138,7 +138,7 @@ router.get("/diagnostics", async (req, res) => {
   today.setHours(0, 0, 0, 0);
 
   try {
-    const [recentDecisionCandidates, todayDecisions] = await Promise.all([
+    const [recentDecisionCandidates, todayDecisions, recentSnapshotCandidates, scanActivity] = await Promise.all([
       db
         .select()
         .from(scannerDecisionsTable)
@@ -149,6 +149,17 @@ router.get("/diagnostics", async (req, res) => {
         .from(scannerDecisionsTable)
         .where(gte(scannerDecisionsTable.createdAt, today))
         .orderBy(desc(scannerDecisionsTable.createdAt)),
+      db
+        .select()
+        .from(marketSnapshotsTable)
+        .orderBy(desc(marketSnapshotsTable.scannedAt))
+        .limit(Math.max(limit * 20, 200)),
+      db
+        .select({
+          latestScanAt: sql<Date | null>`max(${marketSnapshotsTable.scannedAt})`,
+          snapshotsLast10m: sql<number>`count(*) filter (where ${marketSnapshotsTable.scannedAt} >= now() - interval '10 minutes')::int`,
+        })
+        .from(marketSnapshotsTable),
     ]);
 
     const acceptedToday = todayDecisions.filter((decision) => decision.decision === "ACCEPTED").length;
@@ -168,6 +179,10 @@ router.get("/diagnostics", async (req, res) => {
       lastScanAt: status.lastScanAt,
       nextScanIn: status.nextScanIn,
       diagnosticsAvailable: true,
+      scanActivity: {
+        latestSnapshotAt: scanActivity[0]?.latestScanAt ?? null,
+        snapshotsLast10m: Number(scanActivity[0]?.snapshotsLast10m ?? 0),
+      },
       today: {
         totalDecisions: todayDecisions.length,
         accepted: acceptedToday,
@@ -179,6 +194,9 @@ router.get("/diagnostics", async (req, res) => {
       recentDecisions: recentUniqueDecisions.map((decision) => (
         formatDecision(decision, todayCountsBySymbol.get(decision.symbol) ?? 0)
       )),
+      recentSnapshots: uniqueLatestBySymbol(recentSnapshotCandidates)
+        .slice(0, limit)
+        .map(formatSnapshot),
     });
   } catch (err) {
     logger.warn({ err }, "Scanner diagnostics decision store unavailable");
@@ -187,8 +205,13 @@ router.get("/diagnostics", async (req, res) => {
       lastScanAt: status.lastScanAt,
       nextScanIn: status.nextScanIn,
       diagnosticsAvailable: false,
+      scanActivity: {
+        latestSnapshotAt: null,
+        snapshotsLast10m: 0,
+      },
       today: emptyDiagnosticsSummary(),
       recentDecisions: [],
+      recentSnapshots: [],
       message: "Scanner decision history is unavailable. Run database migrations to enable full diagnostics.",
     });
   }
@@ -250,6 +273,7 @@ function formatSnapshot(s: any) {
     volume24h: Number(s.volume24h),
     rvol: Number(s.rvol),
     rank: s.rank,
+    listType: s.listType,
     ema20: s.ema20 ? Number(s.ema20) : null,
     ema50: s.ema50 ? Number(s.ema50) : null,
     atr14: s.atr14 ? Number(s.atr14) : null,
