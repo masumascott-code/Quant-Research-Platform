@@ -6,8 +6,9 @@ import {
   signalsTable,
   paperTradesTable,
   scannerDecisionsTable,
+  systemSettingsTable,
 } from "@workspace/db";
-import { eq, desc, sql, and, gte, count, sum } from "drizzle-orm";
+import { eq, desc, sql, and, gte, count, sum, inArray } from "drizzle-orm";
 import { configService } from "../core/config";
 import { portfolioService } from "../core/portfolio";
 import { ScannerService } from "../services/scanner";
@@ -138,16 +139,30 @@ router.get("/diagnostics", async (req, res) => {
   today.setHours(0, 0, 0, 0);
 
   try {
+    const sizingSettings = await db
+      .select({ updatedAt: systemSettingsTable.updatedAt })
+      .from(systemSettingsTable)
+      .where(inArray(systemSettingsTable.key, [
+        "paperTrading.fixedTradeNotional",
+        "fixed_trade_notional",
+        "paperTrading.defaultLeverage",
+        "default_leverage",
+        "risk.riskPercent",
+        "risk_pct",
+      ]));
+    const diagnosticsStart = latestDate([today, ...sizingSettings.map((setting) => setting.updatedAt)]);
+
     const [recentDecisionCandidates, todayDecisions, recentSnapshotCandidates, scanActivity] = await Promise.all([
       db
         .select()
         .from(scannerDecisionsTable)
+        .where(gte(scannerDecisionsTable.createdAt, diagnosticsStart))
         .orderBy(desc(scannerDecisionsTable.createdAt))
         .limit(Math.max(limit * 20, 200)),
       db
         .select()
         .from(scannerDecisionsTable)
-        .where(gte(scannerDecisionsTable.createdAt, today))
+        .where(gte(scannerDecisionsTable.createdAt, diagnosticsStart))
         .orderBy(desc(scannerDecisionsTable.createdAt)),
       db
         .select()
@@ -179,6 +194,7 @@ router.get("/diagnostics", async (req, res) => {
       lastScanAt: status.lastScanAt,
       nextScanIn: status.nextScanIn,
       diagnosticsAvailable: true,
+      diagnosticsFrom: diagnosticsStart,
       scanActivity: {
         latestSnapshotAt: scanActivity[0]?.latestScanAt ?? null,
         snapshotsLast10m: Number(scanActivity[0]?.snapshotsLast10m ?? 0),
@@ -205,6 +221,7 @@ router.get("/diagnostics", async (req, res) => {
       lastScanAt: status.lastScanAt,
       nextScanIn: status.nextScanIn,
       diagnosticsAvailable: false,
+      diagnosticsFrom: today,
       scanActivity: {
         latestSnapshotAt: null,
         snapshotsLast10m: 0,
@@ -332,6 +349,10 @@ function average(values: number[]): number {
   const numericValues = values.filter((value) => Number.isFinite(value));
   if (numericValues.length === 0) return 0;
   return numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length;
+}
+
+function latestDate(values: Date[]): Date {
+  return values.reduce((latest, value) => value > latest ? value : latest, values[0] ?? new Date());
 }
 
 function countValues(values: string[]): Array<{ reason: string; count: number }> {
