@@ -72,58 +72,57 @@
 }
 
 :root {
-  /* Set light mode to be dark anyway because we are forcing dark theme */
-  color-scheme: dark;
-  --background: 240 10% 4%;
-  --foreground: 0 0% 95%;
+  color-scheme: light;
+  --background: 220 20% 97%;
+  --foreground: 224 24% 10%;
 
-  --card: 240 10% 6%;
-  --card-foreground: 0 0% 95%;
-  --card-border: 240 10% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 224 24% 10%;
+  --card-border: 220 16% 88%;
 
-  --popover: 240 10% 6%;
-  --popover-foreground: 0 0% 95%;
-  --popover-border: 240 10% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 224 24% 10%;
+  --popover-border: 220 16% 88%;
 
-  --primary: 38 92% 50%; /* Amber/Yellow for quantitative accent */
-  --primary-foreground: 240 10% 4%;
+  --primary: 38 92% 46%;
+  --primary-foreground: 0 0% 100%;
   
-  --secondary: 240 10% 12%;
-  --secondary-foreground: 0 0% 95%;
+  --secondary: 220 16% 92%;
+  --secondary-foreground: 224 24% 14%;
 
-  --muted: 240 10% 12%;
-  --muted-foreground: 240 5% 65%;
+  --muted: 220 18% 93%;
+  --muted-foreground: 222 12% 40%;
 
-  --accent: 240 10% 16%;
-  --accent-foreground: 0 0% 98%;
+  --accent: 214 28% 90%;
+  --accent-foreground: 224 24% 12%;
 
-  --destructive: 355 100% 64%; /* Red for losses/shorts */
+  --destructive: 355 76% 52%;
   --destructive-foreground: 0 0% 100%;
 
-  --success: 162 100% 38%; /* Green for gains/longs/wins */
+  --success: 162 72% 32%;
   --success-foreground: 0 0% 100%;
 
-  --warning: 38 92% 50%;
-  --warning-foreground: 0 0% 10%;
+  --warning: 38 92% 46%;
+  --warning-foreground: 0 0% 100%;
 
-  --border: 240 10% 16%;
-  --input: 240 10% 16%;
-  --ring: 38 92% 50%;
+  --border: 220 16% 86%;
+  --input: 220 16% 84%;
+  --ring: 38 92% 46%;
 
-  --chart-1: 38 92% 50%;
-  --chart-2: 162 100% 38%;
-  --chart-3: 355 100% 64%;
-  --chart-4: 280 65% 60%;
-  --chart-5: 340 75% 55%;
+  --chart-1: 38 92% 46%;
+  --chart-2: 162 72% 32%;
+  --chart-3: 355 76% 52%;
+  --chart-4: 214 62% 45%;
+  --chart-5: 280 46% 48%;
 
-  --sidebar: 240 10% 5%;
-  --sidebar-foreground: 0 0% 95%;
-  --sidebar-border: 240 10% 12%;
-  --sidebar-primary: 38 92% 50%;
-  --sidebar-primary-foreground: 240 10% 4%;
-  --sidebar-accent: 240 10% 12%;
-  --sidebar-accent-foreground: 0 0% 98%;
-  --sidebar-ring: 38 92% 50%;
+  --sidebar: 0 0% 100%;
+  --sidebar-foreground: 224 24% 12%;
+  --sidebar-border: 220 16% 86%;
+  --sidebar-primary: 38 92% 46%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 18% 93%;
+  --sidebar-accent-foreground: 224 24% 10%;
+  --sidebar-ring: 38 92% 46%;
 
   --app-font-sans: 'Inter', sans-serif;
   --app-font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
@@ -132,7 +131,7 @@
 }
 
 .dark {
-  /* same as above since we only support dark mode */
+  color-scheme: dark;
   --background: 240 10% 4%;
   --foreground: 0 0% 95%;
   --card: 240 10% 6%;
@@ -174,6 +173,17 @@
 }
 
 @layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
   * {
     @apply border-border;
   }

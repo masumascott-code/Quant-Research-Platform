@@ -61,17 +61,17 @@ export default function Scanner() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Live Scanner Control</h1>
           <p className="text-sm text-muted-foreground mt-1">Real-time market analysis engine</p>
         </div>
-        <div className="flex items-center gap-4 bg-card p-2 rounded-lg border border-border">
-          <div className="flex flex-col px-4 border-r border-border">
+        <div className="grid gap-2 rounded-lg border border-border bg-card p-2 sm:grid-cols-[auto_auto_1fr] sm:items-center">
+          <div className="flex flex-col rounded border border-border/60 px-3 py-2 sm:border-0 sm:border-r sm:px-4">
             <span className="text-[10px] uppercase text-muted-foreground font-mono">Coins Tracked</span>
             <span className="font-mono font-bold text-lg">{statusLoading ? '---' : status?.totalCoinsTracked || 0}</span>
           </div>
-          <div className="flex flex-col px-4">
+          <div className="flex flex-col rounded border border-border/60 px-3 py-2 sm:border-0 sm:px-4">
             <span className="text-[10px] uppercase text-muted-foreground font-mono">Status</span>
             <span className={`font-mono font-bold text-sm flex items-center gap-2 mt-1 ${status?.running ? 'text-success' : 'text-destructive'}`}>
               <span className={`h-2 w-2 rounded-full ${status?.running ? 'bg-success animate-pulse' : 'bg-destructive'}`} />
@@ -80,7 +80,7 @@ export default function Scanner() {
           </div>
           <Button 
             variant={status?.running ? "destructive" : "default"} 
-            className={`ml-2 font-mono uppercase tracking-wider ${!status?.running ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''}`}
+            className={`w-full font-mono uppercase tracking-wider sm:ml-2 sm:w-auto ${!status?.running ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''}`}
             onClick={handleToggleScanner}
             disabled={startMutation.isPending || stopMutation.isPending || statusLoading}
           >

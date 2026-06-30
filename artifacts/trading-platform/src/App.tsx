@@ -3,9 +3,9 @@ import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@ta
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/layout/layout";
-import { useEffect } from "react";
 import { AuthProvider, isUnauthorizedError, notifyUnauthorized } from "@/lib/auth";
 import { ProtectedRoute } from "@/components/auth/protected-route";
+import { ThemeProvider } from "next-themes";
 
 import Dashboard from "@/pages/dashboard";
 import Login from "@/pages/login";
@@ -42,14 +42,6 @@ const queryClient = new QueryClient({
     },
   }),
 });
-
-function ForceDark() {
-  useEffect(() => {
-    document.documentElement.classList.add("dark");
-    document.documentElement.style.colorScheme = "dark";
-  }, []);
-  return null;
-}
 
 function Router() {
   return (
@@ -107,15 +99,16 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <ForceDark />
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <AuthProvider>
-            <Router />
-          </AuthProvider>
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem storageKey="quantedge-theme">
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <AuthProvider>
+              <Router />
+            </AuthProvider>
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

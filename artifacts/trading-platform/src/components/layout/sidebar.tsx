@@ -10,6 +10,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { useGetScannerStatus, getGetScannerStatusQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
@@ -35,9 +36,11 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { setOpenMobile } = useSidebar();
   const { user, logout, canAccessRole } = useAuth();
   const { data: status, isError: scannerStatusError } = useGetScannerStatus({
     query: {
@@ -136,7 +139,11 @@ export function AppSidebar() {
                       }
                       tooltip={item.name}
                     >
-                      <Link href={item.path} className="flex items-center gap-3">
+                      <Link
+                        href={item.path}
+                        className="flex items-center gap-3"
+                        onClick={() => setOpenMobile(false)}
+                      >
                         <item.icon className="h-4 w-4" />
                         <span>{item.name}</span>
                       </Link>
@@ -172,6 +179,7 @@ export function AppSidebar() {
             <div className="truncate text-xs font-mono text-foreground">{user?.username}</div>
             <div className="text-[10px] font-mono uppercase text-muted-foreground">{user?.role}</div>
           </div>
+          <ThemeToggle />
           <Button variant="outline" size="sm" onClick={logout} className="h-8 px-2">
             <LogOut className="h-3.5 w-3.5" />
           </Button>

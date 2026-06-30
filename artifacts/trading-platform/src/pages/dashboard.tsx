@@ -107,9 +107,9 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold tracking-tight">System Dashboard</h1>
-        <div className="flex items-center gap-4 text-sm font-mono text-muted-foreground bg-card px-3 py-1.5 rounded-md border border-border">
+        <div className="flex w-full flex-wrap items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-mono text-muted-foreground sm:w-auto sm:gap-4">
           <span>Last Scan: {dashboard?.lastScanAt ? new Date(dashboard.lastScanAt).toLocaleTimeString() : '---'}</span>
-          <div className="w-px h-4 bg-border" />
+          <div className="hidden h-4 w-px bg-border sm:block" />
           <span className="flex items-center gap-2">
             Status:
             {isLoading ? (
