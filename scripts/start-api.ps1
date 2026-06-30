@@ -33,5 +33,9 @@ if (-not $env:DATABASE_URL) {
 $env:PORT = if ($env:PORT) { $env:PORT } else { "8080" }
 $env:NODE_ENV = if ($env:NODE_ENV) { $env:NODE_ENV } else { "development" }
 
+Write-Host "Building API server..."
+pnpm --filter @workspace/api-server run build
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 Write-Host "Starting API server on port $($env:PORT)..."
 node --enable-source-maps "$root\artifacts\api-server\dist\index.mjs"
