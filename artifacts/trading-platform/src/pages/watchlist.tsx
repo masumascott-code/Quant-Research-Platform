@@ -21,6 +21,8 @@ interface WatchlistItem {
   isActive: boolean;
   promoted: boolean;
   createdAt: string;
+  decisionConfidence?: number;
+  latestScoreAt?: string;
   expiresAt: string;
 }
 
@@ -74,8 +76,13 @@ function WatchlistCard({ item }: { item: WatchlistItem }) {
         <div className="flex gap-2 mb-3 flex-wrap">
           <Badge variant="outline" className="text-xs text-muted-foreground">{item.setupType}</Badge>
           <Badge variant="outline" className={`text-xs ${confidenceBadge(item.confidence)}`}>
-            {item.confidence}
+            Tech: {item.confidence}
           </Badge>
+          {item.decisionConfidence != null && (
+            <Badge variant="outline" className="text-xs text-muted-foreground">
+              Final Conf: {Number(item.decisionConfidence).toFixed(1)}
+            </Badge>
+          )}
         </div>
 
         <div className="grid grid-cols-3 gap-2 text-xs font-mono">
@@ -95,7 +102,7 @@ function WatchlistCard({ item }: { item: WatchlistItem }) {
 
         <div className="mt-3 text-xs text-muted-foreground border-t border-border pt-2 flex items-center gap-1">
           <Clock className="h-3 w-3" />
-          <span>{new Date(item.createdAt).toLocaleTimeString()}</span>
+          <span>{new Date(item.latestScoreAt ?? item.createdAt).toLocaleTimeString()}</span>
           <span className="ml-auto">Score needed to trade: 90</span>
         </div>
       </CardContent>

@@ -334,11 +334,26 @@ function ScannerDiagnosticsPanel() {
     queryFn: () => apiFetch<ScannerDiagnostics>("/api/scanner/diagnostics?limit=12"),
     refetchInterval: 15000,
   });
+  const [displayNextScan, setDisplayNextScan] = useState<number | null>(null);
 
   const latestDecision = data?.recentDecisions[0];
   const latestSnapshot = data?.recentSnapshots?.[0];
   const showScanActivity = !isLoading && (data?.today.totalDecisions ?? 0) === 0 && !!latestSnapshot;
   const latestReason = latestDecision?.reasons[0] ?? latestDecision?.riskSummary[0] ?? "---";
+
+  useEffect(() => {
+    if (data?.nextScanIn == null) {
+      setDisplayNextScan(null);
+      return undefined;
+    }
+
+    setDisplayNextScan(data.nextScanIn);
+    const timer = window.setInterval(() => {
+      setDisplayNextScan((value) => value == null ? null : Math.max(0, value - 1));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [data?.lastScanAt, data?.nextScanIn]);
 
   return (
     <Card className="border-border bg-card/50">
@@ -366,7 +381,7 @@ function ScannerDiagnosticsPanel() {
               <DiagnosticStat label="Accepted" value={data?.today.accepted.toString() ?? "---"} valueClassName="text-success" loading={isLoading} />
               <DiagnosticStat label="Rejected" value={data?.today.rejected.toString() ?? "---"} valueClassName="text-destructive" loading={isLoading} />
               <DiagnosticStat label="Avg Score" value={formatScore(data?.today.averageFinalScore)} loading={isLoading} />
-              <DiagnosticStat label="Next Scan" value={data?.nextScanIn == null ? "---" : `${data.nextScanIn}s`} loading={isLoading} />
+              <DiagnosticStat label="Next Scan" value={displayNextScan == null ? "---" : `${displayNextScan}s`} loading={isLoading} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-0">
@@ -503,7 +518,7 @@ function ScannerDiagnosticsPanel() {
                 </div>
 
                 <div>
-                  <div className="font-mono text-xs text-muted-foreground uppercase">Top Reject Reasons</div>
+                  <div className="font-mono text-xs text-muted-foreground uppercase">Current Reject Reasons</div>
                   <div className="mt-2 space-y-2">
                     {data?.today.topRejectedReasons.length ? (
                       data.today.topRejectedReasons.map((item) => (
@@ -513,7 +528,7 @@ function ScannerDiagnosticsPanel() {
                         </div>
                       ))
                     ) : (
-                      <div className="text-xs text-muted-foreground">No rejected decisions today.</div>
+                      <div className="text-xs text-muted-foreground">No rejected decisions in the current window.</div>
                     )}
                   </div>
                 </div>
