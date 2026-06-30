@@ -40,18 +40,19 @@ Logs: stdout JSON -> Docker json-file rotation
 Metrics: prom-client -> /api/metrics -> Prometheus -> Grafana
 Queues: BullMQ -> Redis -> Worker -> retry/dead-letter
 Database: Drizzle schema push -> PostgreSQL -> pg_dump backups
-Secrets: .env.production or platform secret manager
+Secrets: local-only `.env.production` or platform secret manager
 ```
 
 ## First Deploy
 
-1. Copy `.env.production.example` to `.env.production`.
-2. Replace all placeholder passwords and secrets.
-3. Run `docker compose build`.
-4. Run `docker compose run --rm api pnpm --filter @workspace/db run push`.
-5. Run `docker compose up -d`.
-6. Check `http://localhost:8080/api/readyz`.
-7. Open Grafana at `http://localhost:3000`.
+1. Copy `.env.production.example` to local-only `.env.production`, or configure equivalent platform secrets.
+2. Replace all placeholder passwords and secrets. Do not commit real production env files.
+3. If real production secrets were ever committed or pushed, rotate the affected credentials and tokens outside the repo before deploying.
+4. Run `docker compose build`.
+5. Run `docker compose run --rm api pnpm --filter @workspace/db run push`.
+6. Run `docker compose up -d`.
+7. Check `http://localhost:8080/api/readyz`.
+8. Open Grafana at `http://localhost:3000`.
 
 ## Migration Workflow
 
