@@ -35,14 +35,14 @@ router.post("/settings", async (req, res) => {
     for (const [key, value] of entries) {
       valuesToPersist.set(key, value);
       const normalized = ConfigurationValidator.normalizeEntry(key, value);
-      if (normalized && normalized.key !== key) {
+      if (normalized && normalized.key === key) {
         canonicalValues.set(normalized.key, normalized.value);
       }
     }
 
     for (const [key, value] of entries) {
       const normalized = ConfigurationValidator.normalizeEntry(key, value);
-      if (normalized && normalized.key === key) {
+      if (normalized && normalized.key !== key) {
         canonicalValues.set(normalized.key, normalized.value);
       }
     }

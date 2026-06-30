@@ -35,7 +35,7 @@ async function saveSettings(settings: Record<string, string>) {
   return await apiFetch("api/admin/settings", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ settings }),
+    body: JSON.stringify({ settings: canonicalSettings(settings) }),
   });
 }
 
@@ -108,6 +108,10 @@ function canonicalEntries(settings: Record<string, string>) {
   return Object.entries(settings)
     .filter(([key]) => key.includes("."))
     .sort(([a], [b]) => a.localeCompare(b));
+}
+
+function canonicalSettings(settings: Record<string, string>) {
+  return Object.fromEntries(canonicalEntries(settings));
 }
 
 export default function Admin() {
