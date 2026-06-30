@@ -90,6 +90,7 @@ type ConfigPath =
   | "risk.killSwitch"
   | "paperTrading.defaultEquity"
   | "paperTrading.defaultLeverage"
+  | "paperTrading.fixedTradeNotional"
   | "paperTrading.tradingFeeRate"
   | "paperTrading.makerFeeRate"
   | "paperTrading.takerFeeRate"
@@ -228,6 +229,7 @@ const CONFIG_VALUE_KINDS: Record<ConfigPath, ValueKind> = {
   "risk.killSwitch": "boolean",
   "paperTrading.defaultEquity": "number",
   "paperTrading.defaultLeverage": "number",
+  "paperTrading.fixedTradeNotional": "number",
   "paperTrading.tradingFeeRate": "number",
   "paperTrading.makerFeeRate": "number",
   "paperTrading.takerFeeRate": "number",
@@ -299,6 +301,7 @@ export const LEGACY_CONFIG_ALIASES: Record<string, ConfigPath> = {
   emergency_stop: "risk.killSwitch",
   default_equity: "paperTrading.defaultEquity",
   default_leverage: "paperTrading.defaultLeverage",
+  fixed_trade_notional: "paperTrading.fixedTradeNotional",
   trading_fees: "paperTrading.tradingFeeRate",
   maker_fee: "paperTrading.makerFeeRate",
   taker_fee: "paperTrading.takerFeeRate",

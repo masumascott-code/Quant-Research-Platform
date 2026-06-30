@@ -96,6 +96,7 @@ export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
   paperTrading: {
     defaultEquity: 10_000,
     defaultLeverage: 1,
+    fixedTradeNotional: 100,
     tradingFeeRate: 0,
     makerFeeRate: 0,
     takerFeeRate: 0,

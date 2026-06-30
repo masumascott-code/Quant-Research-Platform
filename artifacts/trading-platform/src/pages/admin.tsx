@@ -223,6 +223,7 @@ export default function Admin() {
                   { key: "min_rvol", label: "Min RVOL", type: "number", min: 1.0, max: 5.0 },
                   { key: "max_open_trades", label: "Max Open Trades", type: "number", min: 1, max: 10 },
                   { key: "max_daily_trades", label: "Max Daily Trades", type: "number", min: 1, max: 20 },
+                  { key: "fixed_trade_notional", label: "Trade Size (USDT)", type: "number", min: 10, max: 1000 },
                   { key: "max_consecutive_losses", label: "Max Consecutive Losses", type: "number", min: 1, max: 10 },
                   { key: "cooldown_minutes", label: "Cooldown (minutes)", type: "number", min: 5, max: 120 },
                   { key: "risk_pct", label: "Risk % per Trade", type: "number", min: 0.5, max: 5 },

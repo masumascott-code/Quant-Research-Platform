@@ -24,6 +24,7 @@ export class PositionSizingService {
   calculate(params: {
     equity: number;
     riskPercent: number;
+    fixedNotional?: number;
     entryPrice: number;
     stopLoss: number;
     leverage: number;
@@ -39,8 +40,14 @@ export class PositionSizingService {
       throw new Error("Entry price and stop loss must create a positive stop distance");
     }
 
-    const riskAmount = this.riskCalculator.riskBudget(params.equity, params.riskPercent);
-    const quantity = riskAmount / stopDistance;
+    const fixedNotional = params.fixedNotional && params.fixedNotional > 0
+      ? params.fixedNotional
+      : null;
+    const quantity = fixedNotional == null
+      ? this.riskCalculator.riskBudget(params.equity, params.riskPercent) / stopDistance
+      : fixedNotional / params.entryPrice;
+    const riskAmount = quantity * stopDistance;
+    const riskPercent = (riskAmount / params.equity) * 100;
     const margin = this.marginCalculator.estimate({
       entryPrice: params.entryPrice,
       quantity,
@@ -50,20 +57,21 @@ export class PositionSizingService {
       fundingRate: params.fundingRate,
     });
 
-    return this.toPlan(params, quantity, riskAmount, stopDistance, margin);
+    return this.toPlan(params, quantity, riskAmount, riskPercent, stopDistance, margin);
   }
 
   private toPlan(
-    params: { entryPrice: number; stopLoss: number; riskPercent: number },
+    params: { entryPrice: number; stopLoss: number },
     quantity: number,
     riskAmount: number,
+    riskPercent: number,
     stopDistance: number,
     margin: MarginEstimate
   ): PositionSizingPlan {
     return {
       quantity,
       riskAmount,
-      riskPercent: params.riskPercent,
+      riskPercent,
       stopDistance,
       stopDistancePercent: this.riskCalculator.stopDistancePercent(params.entryPrice, params.stopLoss),
       notional: margin.notional,

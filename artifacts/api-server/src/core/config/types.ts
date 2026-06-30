@@ -96,6 +96,7 @@ export interface RiskRuntimeConfig {
 export interface PaperTradingRuntimeConfig {
   defaultEquity: number;
   defaultLeverage: number;
+  fixedTradeNotional: number;
   tradingFeeRate: number;
   makerFeeRate: number;
   takerFeeRate: number;

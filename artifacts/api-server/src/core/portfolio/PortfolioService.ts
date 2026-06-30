@@ -56,6 +56,7 @@ export class PortfolioService {
       sizing = this.positionSizingService.calculate({
         equity: account.equity,
         riskPercent: config.risk.riskPercent,
+        fixedNotional: config.paperTrading.fixedTradeNotional,
         entryPrice: analysis.entryPrice,
         stopLoss: analysis.stopLoss,
         leverage: config.paperTrading.defaultLeverage,
