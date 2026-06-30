@@ -136,7 +136,8 @@ type ConfigPath =
   | "ai.retryCount"
   | "ai.retryDelayMs"
   | "ai.cacheTtlMs"
-  | "ai.rateLimitPerMinute";
+  | "ai.rateLimitPerMinute"
+  | "notifications.telegramEnabled";
 
 type ValueKind = "string" | "number" | "boolean" | "stringArray";
 
@@ -276,6 +277,7 @@ const CONFIG_VALUE_KINDS: Record<ConfigPath, ValueKind> = {
   "ai.retryDelayMs": "number",
   "ai.cacheTtlMs": "number",
   "ai.rateLimitPerMinute": "number",
+  "notifications.telegramEnabled": "boolean",
 };
 
 export const LEGACY_CONFIG_ALIASES: Record<string, ConfigPath> = {
@@ -315,6 +317,7 @@ export const LEGACY_CONFIG_ALIASES: Record<string, ConfigPath> = {
   ai_max_tokens: "ai.maxTokens",
   ai_timeout_ms: "ai.timeoutMs",
   ai_retry_count: "ai.retryCount",
+  telegram_enabled: "notifications.telegramEnabled",
 };
 
 function cloneDefaultConfig(): RuntimeConfig {
@@ -390,7 +393,6 @@ export class ConfigurationValidator {
           ? String(Number(value) / 1000)
           : String(value);
       }
-      flat.telegram_enabled = "true";
       flat.scanner_enabled = "true";
       flat.emergency_stop = String(defaults.risk.killSwitch);
     }
@@ -426,7 +428,6 @@ export class ConfigurationValidator {
           ? Number(value) / 1000
           : value;
       }
-      flat.telegram_enabled = true;
       flat.scanner_enabled = true;
       flat.emergency_stop = config.risk.killSwitch;
     }

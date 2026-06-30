@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
   Settings, Shield, AlertTriangle, Play, Pause,
-  Activity, Zap, Clock, RefreshCw
+  Activity, Zap, RefreshCw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api-fetch";
@@ -59,6 +59,55 @@ async function emergencyStop() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
   });
+}
+
+const FEATURED_SETTING_KEYS = [
+  "scanner.minScoreTrade",
+  "scanner.minScoreWatchlist",
+  "scanner.minRvol",
+  "scanner.maxOpenTrades",
+  "scanner.maxDailyTrades",
+  "scanner.maxWeeklyTrades",
+  "paperTrading.fixedTradeNotional",
+  "risk.riskPercent",
+  "risk.cooldownMinutes",
+  "risk.maxConsecutiveLosses",
+  "notifications.telegramEnabled",
+] as const;
+
+function settingLabel(key: string) {
+  const labels: Record<string, string> = {
+    "scanner.minScoreTrade": "Min Score to Paper Trade",
+    "scanner.minScoreWatchlist": "Min Score for Watchlist",
+    "scanner.scanIntervalMs": "Scan Interval (ms)",
+    "scanner.minRvol": "Min RVOL",
+    "paperTrading.fixedTradeNotional": "Trade Size (USDT)",
+    "risk.riskPercent": "Risk % per Trade",
+    "risk.cooldownMinutes": "Cooldown (minutes)",
+    "risk.maxConsecutiveLosses": "Max Consecutive Losses",
+    "notifications.telegramEnabled": "Telegram Alerts",
+  };
+  if (labels[key]) return labels[key];
+  const raw = key.split(".").at(-1) ?? key;
+  return raw.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
+}
+
+function sectionLabel(section: string) {
+  return section.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
+}
+
+function isBooleanSetting(value: string) {
+  return value === "true" || value === "false";
+}
+
+function inputStep(key: string) {
+  return /(rate|ratio|percent|rvol|temperature|tolerance|weight|score)/i.test(key) ? "0.1" : "1";
+}
+
+function canonicalEntries(settings: Record<string, string>) {
+  return Object.entries(settings)
+    .filter(([key]) => key.includes("."))
+    .sort(([a], [b]) => a.localeCompare(b));
 }
 
 export default function Admin() {
@@ -116,6 +165,19 @@ export default function Admin() {
   });
 
   const set = (key: string, value: string) => setLocalSettings(s => ({ ...s, [key]: value }));
+  const settingsEntries = canonicalEntries(localSettings);
+  const featuredEntries = FEATURED_SETTING_KEYS
+    .filter((key) => key in localSettings)
+    .map((key) => [key, localSettings[key]] as [string, string]);
+  const featuredKeySet = new Set(FEATURED_SETTING_KEYS);
+  const groupedSettings = settingsEntries
+    .filter(([key]) => !featuredKeySet.has(key as typeof FEATURED_SETTING_KEYS[number]))
+    .reduce<Record<string, Array<[string, string]>>>((groups, entry) => {
+      const [section] = entry[0].split(".");
+      groups[section] = groups[section] ?? [];
+      groups[section].push(entry);
+      return groups;
+    }, {});
 
   return (
     <div className="space-y-6">
@@ -214,45 +276,63 @@ export default function Admin() {
           {settingsLoading ? (
             <div className="text-muted-foreground text-sm animate-pulse">Loading...</div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[
-                  { key: "scan_interval_seconds", label: "Scan Interval (seconds)", type: "number", min: 15, max: 300 },
-                  { key: "min_score_trade", label: "Min Score to Trade", type: "number", min: 80, max: 100 },
-                  { key: "min_score_watchlist", label: "Min Score for Watchlist", type: "number", min: 70, max: 95 },
-                  { key: "min_rvol", label: "Min RVOL", type: "number", min: 1.0, max: 5.0 },
-                  { key: "max_open_trades", label: "Max Open Trades", type: "number", min: 1, max: 10 },
-                  { key: "max_daily_trades", label: "Max Daily Trades", type: "number", min: 1, max: 20 },
-                  { key: "fixed_trade_notional", label: "Trade Size (USDT)", type: "number", min: 10, max: 1000 },
-                  { key: "max_consecutive_losses", label: "Max Consecutive Losses", type: "number", min: 1, max: 10 },
-                  { key: "cooldown_minutes", label: "Cooldown (minutes)", type: "number", min: 5, max: 120 },
-                  { key: "risk_pct", label: "Risk % per Trade", type: "number", min: 0.5, max: 5 },
-                ].map(({ key, label, type, min, max }) => (
+                {featuredEntries.map(([key, value]) => (
                   <div key={key} className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">{label}</Label>
-                    <Input
-                      type={type}
-                      min={min}
-                      max={max}
-                      step={key === "min_rvol" || key === "risk_pct" ? "0.1" : "1"}
-                      value={localSettings[key] ?? ""}
-                      onChange={e => set(key, e.target.value)}
-                      className="bg-muted/30 border-border text-foreground font-mono text-sm h-8"
-                    />
+                    <Label className="text-xs text-muted-foreground">{settingLabel(key)}</Label>
+                    {isBooleanSetting(value) ? (
+                      <div className="flex h-8 items-center gap-2 rounded border border-border bg-muted/30 px-3">
+                        <Switch
+                          checked={value === "true"}
+                          onCheckedChange={checked => set(key, checked ? "true" : "false")}
+                        />
+                        <span className="text-xs font-mono text-muted-foreground">{value === "true" ? "Enabled" : "Disabled"}</span>
+                      </div>
+                    ) : (
+                      <Input
+                        type={Number.isFinite(Number(value)) && value.trim() !== "" ? "number" : "text"}
+                        step={inputStep(key)}
+                        value={localSettings[key] ?? ""}
+                        onChange={e => set(key, e.target.value)}
+                        className="bg-muted/30 border-border text-foreground font-mono text-sm h-8"
+                      />
+                    )}
                   </div>
                 ))}
               </div>
 
-              <div className="flex items-center gap-4 pt-2 border-t border-border">
-                {[
-                  { key: "telegram_enabled", label: "Telegram Alerts" },
-                ].map(({ key, label }) => (
-                  <div key={key} className="flex items-center gap-2">
-                    <Switch
-                      checked={localSettings[key] === "true"}
-                      onCheckedChange={v => set(key, v ? "true" : "false")}
-                    />
-                    <Label className="text-sm text-muted-foreground">{label}</Label>
+              <div className="space-y-5 border-t border-border pt-5">
+                {Object.entries(groupedSettings).map(([section, entries]) => (
+                  <div key={section} className="space-y-3">
+                    <h3 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+                      {sectionLabel(section)}
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {entries.map(([key, value]) => (
+                        <div key={key} className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">{settingLabel(key)}</Label>
+                          {isBooleanSetting(value) ? (
+                            <div className="flex h-8 items-center gap-2 rounded border border-border bg-muted/30 px-3">
+                              <Switch
+                                checked={value === "true"}
+                                onCheckedChange={checked => set(key, checked ? "true" : "false")}
+                              />
+                              <span className="text-xs font-mono text-muted-foreground">{value === "true" ? "Enabled" : "Disabled"}</span>
+                            </div>
+                          ) : (
+                            <Input
+                              type={Number.isFinite(Number(value)) && value.trim() !== "" ? "number" : "text"}
+                              step={inputStep(key)}
+                              value={localSettings[key] ?? ""}
+                              onChange={e => set(key, e.target.value)}
+                              className="bg-muted/30 border-border text-foreground font-mono text-sm h-8"
+                            />
+                          )}
+                          <div className="truncate text-[10px] font-mono text-muted-foreground/70">{key}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -276,7 +356,7 @@ export default function Admin() {
       </Card>
 
       <div className="text-xs text-muted-foreground font-mono text-center py-2">
-        Note: Scanner interval and risk settings take effect on the next scan cycle. Restart the server to apply immediately.
+        Note: Saved runtime settings reload on the API immediately; active scanner decisions use them on the next scan cycle.
       </div>
     </div>
   );

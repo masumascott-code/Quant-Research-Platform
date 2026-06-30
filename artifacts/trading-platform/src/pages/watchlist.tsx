@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Eye, TrendingUp, TrendingDown, Clock, CheckCircle } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { PriceChart } from "@/components/market/price-chart";
 
 interface WatchlistItem {
   id: number;
@@ -30,6 +31,10 @@ async function fetchWatchlist() {
   return await apiFetch<{ active: WatchlistItem[]; history: WatchlistItem[] }>("api/watchlist");
 }
 
+async function fetchSettings() {
+  return await apiFetch<{ settings: Record<string, string> }>("api/admin/settings");
+}
+
 function confidenceBadge(c: string) {
   const map: Record<string, string> = {
     "Extreme": "bg-purple-500/20 text-purple-400 border-purple-500/30",
@@ -41,7 +46,7 @@ function confidenceBadge(c: string) {
   return map[c] ?? map["Medium"];
 }
 
-function WatchlistCard({ item }: { item: WatchlistItem }) {
+function WatchlistCard({ item, minTradeScore }: { item: WatchlistItem; minTradeScore: number }) {
   const isLong = item.direction === "LONG";
   const score = Number(item.score);
 
@@ -100,10 +105,22 @@ function WatchlistCard({ item }: { item: WatchlistItem }) {
           </div>
         </div>
 
+        <PriceChart
+          symbol={item.symbol}
+          direction={item.direction}
+          compact
+          className="mt-3"
+          levels={{
+            entryPrice: Number(item.entryPrice),
+            stopLoss: Number(item.stopLoss),
+            tp1: Number(item.tp1),
+          }}
+        />
+
         <div className="mt-3 text-xs text-muted-foreground border-t border-border pt-2 flex items-center gap-1">
           <Clock className="h-3 w-3" />
           <span>{new Date(item.latestScoreAt ?? item.createdAt).toLocaleTimeString()}</span>
-          <span className="ml-auto">Score needed to trade: 90</span>
+          <span className="ml-auto">Score needed to trade: {minTradeScore}</span>
         </div>
       </CardContent>
     </Card>
@@ -116,6 +133,12 @@ export default function Watchlist() {
     queryFn: fetchWatchlist,
     refetchInterval: 30000,
   });
+  const { data: settingsData } = useQuery({
+    queryKey: ["admin-settings", "watchlist-threshold"],
+    queryFn: fetchSettings,
+    staleTime: 30000,
+  });
+  const minTradeScore = Number(settingsData?.settings["scanner.minScoreTrade"] ?? settingsData?.settings.min_score_trade ?? 80);
 
   return (
     <div className="space-y-6">
@@ -151,7 +174,7 @@ export default function Watchlist() {
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {data.active.map(item => (
-                  <WatchlistCard key={item.id} item={item} />
+                  <WatchlistCard key={item.id} item={item} minTradeScore={minTradeScore} />
                 ))}
               </div>
             </div>
@@ -173,7 +196,7 @@ export default function Watchlist() {
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {data.history.slice(0, 12).map(item => (
                   <div key={item.id} className="opacity-50">
-                    <WatchlistCard item={item} />
+                    <WatchlistCard item={item} minTradeScore={minTradeScore} />
                   </div>
                 ))}
               </div>

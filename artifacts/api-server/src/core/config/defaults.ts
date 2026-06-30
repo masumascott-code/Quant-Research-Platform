@@ -21,7 +21,7 @@ export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
     signalTtlMs: 4 * 60 * 60 * 1000,
     watchlistTtlMs: 2 * 60 * 60 * 1000,
     snapshotFreshnessWindowMs: 5 * 60 * 1000,
-    minScoreTrade: 90,
+    minScoreTrade: 80,
     minScoreWatchlist: 80,
     maxOpenTrades: 3,
     maxDailyTrades: 5,
@@ -151,5 +151,8 @@ export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
     retryDelayMs: 750,
     cacheTtlMs: 600000,
     rateLimitPerMinute: 15,
+  },
+  notifications: {
+    telegramEnabled: true,
   },
 };

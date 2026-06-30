@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useState } from "react";
 import { Crosshair } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { PriceChart } from "@/components/market/price-chart";
 
 export default function Signals() {
   const [status, setStatus] = useState<GetSignalsStatus | "all">("active");
@@ -118,6 +119,16 @@ export default function Signals() {
                   </div>
                   <Progress value={signal.score} className="h-1.5" />
                 </div>
+
+                <PriceChart
+                  symbol={signal.symbol}
+                  direction={signal.direction}
+                  levels={{
+                    entryPrice: signal.entryPrice,
+                    stopLoss: signal.stopLoss,
+                    tp1: signal.tp1,
+                  }}
+                />
                 
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm font-mono bg-muted/30 p-3 rounded border border-border/50">
                   <div className="flex flex-col">

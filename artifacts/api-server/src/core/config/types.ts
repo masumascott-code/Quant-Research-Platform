@@ -157,6 +157,10 @@ export interface AIRuntimeConfig {
   rateLimitPerMinute: number;
 }
 
+export interface NotificationsRuntimeConfig {
+  telegramEnabled: boolean;
+}
+
 export interface RuntimeConfig {
   scanner: ScannerRuntimeConfig;
   signal: SignalRuntimeConfig;
@@ -166,6 +170,7 @@ export interface RuntimeConfig {
   slMonitor: SlMonitorRuntimeConfig;
   scannerDecision: ScannerDecisionRuntimeConfig;
   ai: AIRuntimeConfig;
+  notifications: NotificationsRuntimeConfig;
 }
 
 export type RuntimeConfigValue = string | number | boolean | string[];

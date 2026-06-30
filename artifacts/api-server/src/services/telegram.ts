@@ -1,9 +1,14 @@
 import { logger } from "../lib/logger";
+import { configService } from "../core/config";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 async function sendMessage(text: string): Promise<void> {
+  if (!configService.getSync().notifications.telegramEnabled) {
+    logger.info("Telegram notifications disabled by runtime configuration");
+    return;
+  }
   if (!BOT_TOKEN || !CHAT_ID) {
     logger.warn("Telegram not configured — skipping notification");
     return;
@@ -48,11 +53,12 @@ function setupEmoji(t?: string): string {
 
 export const Telegram = {
   async scannerStarted() {
+    const { scanIntervalMs, minScoreTrade } = configService.getSync().scanner;
     await sendMessage(
       `🟢 <b>QUANTEDGE AI v2.0 — Scanner Active</b>\n` +
       `━━━━━━━━━━━━━━━━━━━━━\n` +
-      `Scanning every <b>30 seconds</b>\n` +
-      `Only A/A+ setups (Score ≥90)\n` +
+      `Scanning every <b>${Math.round(scanIntervalMs / 1000)} seconds</b>\n` +
+      `Paper trade signals: Score <b>≥${minScoreTrade}</b>\n` +
       `8-Factor Scoring | Multi-Timeframe\n` +
       `Risk Manager: Active ✅`
     );
@@ -80,7 +86,7 @@ export const Telegram = {
     timeframeAlignment?: string;
   }) {
     const dir = signal.direction === "LONG" ? "🟢 LONG" : "🔴 SHORT";
-    const grade = signal.grade === "A+" ? "⭐ A+" : "✅ A";
+    const grade = signal.grade === "A+" ? "⭐ A+" : signal.grade === "A" ? "✅ A" : `🟡 ${signal.grade}`;
     const conf = confidenceEmoji(signal.confidence);
     const setup = setupEmoji(signal.setupType);
 
@@ -206,11 +212,12 @@ export const Telegram = {
   },
 
   async watchlistAdded(symbol: string, direction: string, score: number, setupType: string) {
+    const { minScoreTrade } = configService.getSync().scanner;
     await sendMessage(
       `👁️ <b>WATCHLIST</b> — Near-Miss Signal\n` +
       `<b>${symbol}</b> ${direction} | Score: <b>${score}/100</b>\n` +
       `Setup: ${setupType}\n` +
-      `<i>Monitoring — will alert if setup improves to ≥90</i>`
+      `<i>Monitoring — will alert if setup improves to ≥${minScoreTrade}</i>`
     );
   },
 

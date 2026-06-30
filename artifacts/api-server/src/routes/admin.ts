@@ -14,6 +14,10 @@ router.get("/settings", async (req, res) => {
     const settings: Record<string, string> = { ...configService.defaultsFlat(true) };
     for (const row of rows) {
       settings[row.key] = row.value;
+      const normalized = ConfigurationValidator.normalizeEntry(row.key, row.value);
+      if (normalized) {
+        settings[normalized.key] = normalized.value;
+      }
     }
     res.json({ settings });
   } catch (err) {
@@ -27,17 +31,18 @@ router.post("/settings", async (req, res) => {
     const valuesToPersist = new Map<string, string>();
     const canonicalValues = new Map<string, string>();
 
-    for (const [key, value] of Object.entries(settings)) {
+    const entries = Object.entries(settings);
+    for (const [key, value] of entries) {
       valuesToPersist.set(key, value);
       const normalized = ConfigurationValidator.normalizeEntry(key, value);
-      if (normalized && normalized.key === key) {
+      if (normalized && normalized.key !== key) {
         canonicalValues.set(normalized.key, normalized.value);
       }
     }
 
-    for (const [key, value] of Object.entries(settings)) {
+    for (const [key, value] of entries) {
       const normalized = ConfigurationValidator.normalizeEntry(key, value);
-      if (normalized && normalized.key !== key) {
+      if (normalized && normalized.key === key) {
         canonicalValues.set(normalized.key, normalized.value);
       }
     }
