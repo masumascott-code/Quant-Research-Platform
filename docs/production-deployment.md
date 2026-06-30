@@ -48,11 +48,23 @@ Secrets: local-only `.env.production` or platform secret manager
 1. Copy `.env.production.example` to local-only `.env.production`, or configure equivalent platform secrets.
 2. Replace all placeholder passwords and secrets. Do not commit real production env files.
 3. If real production secrets were ever committed or pushed, rotate the affected credentials and tokens outside the repo before deploying.
-4. Run `docker compose build`.
-5. Run `docker compose run --rm api pnpm --filter @workspace/db run push`.
-6. Run `docker compose up -d`.
+4. Run `docker compose --env-file .env.production build`.
+5. Run `docker compose --env-file .env.production up migrate`.
+6. Run `docker compose --env-file .env.production up -d`.
 7. Check `http://localhost:8080/api/readyz`.
 8. Open Grafana at `http://localhost:3000`.
+
+## Compose Environment Loading
+
+Production Compose commands must load `.env.production` intentionally:
+
+```bash
+docker compose --env-file .env.production build
+docker compose --env-file .env.production up migrate
+docker compose --env-file .env.production up -d
+```
+
+`env_file` supplies variables inside containers after Compose has parsed the file. It does not satisfy Compose interpolation such as `${POSTGRES_PASSWORD:?}` or `${GRAFANA_ADMIN_PASSWORD:?}`, which is resolved before containers start. Use `--env-file .env.production`, exported shell variables, or equivalent deployment-platform secret injection.
 
 ## Migration Workflow
 
@@ -66,7 +78,7 @@ pnpm run db:migrate:production
 In Docker:
 
 ```bash
-docker compose run --rm api pnpm --filter @workspace/db run push
+docker compose --env-file .env.production up migrate
 ```
 
 ## Backup
@@ -89,10 +101,10 @@ pnpm run db:restore -- backups/quantedge-YYYYMMDD-HHMMSS.dump
 
 1. Keep the previous image tag before deploying a new version.
 2. If health checks fail, stop the new containers:
-   `docker compose down`
+   `docker compose --env-file .env.production down`
 3. Restore the previous image tag in Compose or your registry deploy config.
 4. Start the previous version:
-   `docker compose up -d`
+   `docker compose --env-file .env.production up -d`
 5. Restore DB only if the rollback requires schema/data reversal.
 6. Validate `/api/readyz`, `/api/healthz`, and Grafana request/error panels.
 

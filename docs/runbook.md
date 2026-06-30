@@ -1,20 +1,22 @@
 # QUANTEDGE AI Runbook
 
+For production Docker Compose commands, pass `--env-file .env.production` or provide equivalent shell/deployment-platform secrets. The compose `env_file` entries populate containers, but they do not satisfy `${...}` interpolation before Compose starts services.
+
 ## API Not Ready
 
-1. Check container status: `docker compose ps`.
-2. Check API logs: `docker compose logs api --tail=200`.
-3. Verify database: `docker compose exec postgres pg_isready -U postgres`.
+1. Check container status: `docker compose --env-file .env.production ps`.
+2. Check API logs: `docker compose --env-file .env.production logs api --tail=200`.
+3. Verify database: `docker compose --env-file .env.production exec postgres pg_isready -U postgres`.
 4. Verify required production env values in `.env.production`.
-5. Restart API only: `docker compose restart api`.
+5. Restart API only: `docker compose --env-file .env.production restart api`.
 
 ## Worker Failing Jobs
 
-1. Check worker logs: `docker compose logs worker --tail=200`.
-2. Check Redis: `docker compose exec redis redis-cli ping`.
+1. Check worker logs: `docker compose --env-file .env.production logs worker --tail=200`.
+2. Check Redis: `docker compose --env-file .env.production exec redis redis-cli ping`.
 3. Confirm `REDIS_URL=redis://redis:6379`.
 4. Inspect repeated failures and dead-letter entries.
-5. Restart worker: `docker compose restart worker`.
+5. Restart worker: `docker compose --env-file .env.production restart worker`.
 
 ## Scheduler Not Enqueuing
 
@@ -48,8 +50,8 @@
 
 ## Rollback
 
-1. Stop current stack: `docker compose down`.
+1. Stop current stack: `docker compose --env-file .env.production down`.
 2. Restore previous image tags.
 3. Restore DB backup only if required.
-4. Start stack: `docker compose up -d`.
+4. Start stack: `docker compose --env-file .env.production up -d`.
 5. Verify `/api/readyz` and Grafana.

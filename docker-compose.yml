@@ -1,5 +1,7 @@
 name: quantedge-ai
 
+# Production commands must pass --env-file .env.production or equivalent shell env
+# for ${...} interpolation; service env_file only applies inside containers.
 services:
   postgres:
     image: postgres:17-alpine
