@@ -24,7 +24,65 @@ export default function Losers() {
         <p className="text-sm text-muted-foreground mt-1">Market laggards by 24h performance</p>
       </div>
 
-      <div className="rounded-md border border-border bg-card overflow-hidden">
+      <div className="space-y-3 md:hidden">
+        {isLoading ? (
+          Array.from({ length: 10 }).map((_, i) => (
+            <div key={i} className="rounded-md border border-border bg-card p-4">
+              <Skeleton className="h-5 w-24" />
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                {Array.from({ length: 4 }).map((__, j) => (
+                  <Skeleton key={j} className="h-10 w-full" />
+                ))}
+              </div>
+            </div>
+          ))
+        ) : losers?.length === 0 ? (
+          <div className="rounded-md border border-border bg-card py-12 text-center text-sm font-mono text-muted-foreground">
+            NO LOSERS DETECTED
+          </div>
+        ) : (
+          losers?.map((coin) => (
+            <div key={`${coin.symbol}-${coin.id}`} className="rounded-md border border-border bg-card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs text-muted-foreground">#{coin.rank}</span>
+                    <span className="font-mono text-lg font-bold text-foreground">{coin.symbol}</span>
+                  </div>
+                  <div className="mt-1 font-mono text-xs text-muted-foreground">${(coin.volume24h / 1000000).toFixed(2)}M volume</div>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono text-base font-semibold text-destructive">{coin.priceChangePercent.toFixed(2)}%</div>
+                  <div className="mt-1 font-mono text-[10px] text-muted-foreground">24H</div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-2 text-xs font-mono">
+                <div className="rounded border border-border bg-muted/30 p-2">
+                  <div className="text-[10px] uppercase text-muted-foreground">Price</div>
+                  <div className="mt-1 text-foreground">{coin.price.toFixed(4)}</div>
+                </div>
+                <div className="rounded border border-border bg-muted/30 p-2">
+                  <div className="text-[10px] uppercase text-muted-foreground">RVOL</div>
+                  <div className="mt-1 text-foreground">{coin.rvol.toFixed(2)}x</div>
+                </div>
+                <div className="col-span-2 rounded border border-border bg-muted/30 p-2">
+                  <div className="text-[10px] uppercase text-muted-foreground">Trend</div>
+                  <div className={`mt-1 w-fit rounded px-2 py-0.5 text-[10px] uppercase tracking-wider ${
+                    coin.trend === 'UP' ? 'bg-success/20 text-success' :
+                    coin.trend === 'DOWN' ? 'bg-destructive/20 text-destructive' :
+                    'bg-muted text-muted-foreground'
+                  }`}>
+                    {coin.trend || 'NEUTRAL'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="hidden rounded-md border border-border bg-card overflow-hidden md:block">
         <Table>
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent bg-muted/30">

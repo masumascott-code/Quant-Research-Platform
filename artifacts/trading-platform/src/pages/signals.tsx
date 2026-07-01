@@ -36,9 +36,9 @@ export default function Signals() {
           <p className="text-sm text-muted-foreground mt-1">Algorithmic trade setups and analysis</p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
           <Select value={status} onValueChange={(v: GetSignalsStatus | "all") => setStatus(v)}>
-            <SelectTrigger className="w-[140px] font-mono text-sm bg-card">
+            <SelectTrigger className="w-full font-mono text-sm bg-card sm:w-[140px]">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -51,7 +51,7 @@ export default function Signals() {
           </Select>
 
           <Select value={direction} onValueChange={(v: GetSignalsDirection | "all") => setDirection(v)}>
-            <SelectTrigger className="w-[140px] font-mono text-sm bg-card">
+            <SelectTrigger className="w-full font-mono text-sm bg-card sm:w-[140px]">
               <SelectValue placeholder="Direction" />
             </SelectTrigger>
             <SelectContent>

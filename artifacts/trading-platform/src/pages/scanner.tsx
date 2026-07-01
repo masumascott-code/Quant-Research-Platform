@@ -102,7 +102,49 @@ export default function Scanner() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <Table>
+            <div className="space-y-2 p-3 md:hidden">
+              {gainersLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="rounded-md border border-border bg-muted/20 p-3">
+                    <Skeleton className="h-4 w-20" />
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <Skeleton className="h-8 w-full" />
+                      <Skeleton className="h-8 w-full" />
+                      <Skeleton className="h-8 w-full" />
+                    </div>
+                  </div>
+                ))
+              ) : gainers?.length === 0 ? (
+                <div className="py-6 text-center text-sm font-mono text-muted-foreground">NO GAINERS DETECTED</div>
+              ) : (
+                gainers?.map((coin) => (
+                  <div key={`${coin.symbol}-${coin.id}`} className="rounded-md border border-border bg-muted/20 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-mono text-base font-bold text-foreground">{coin.symbol}</div>
+                        <div className="mt-1 text-xs font-mono text-muted-foreground">RVOL {coin.rvol.toFixed(1)}x</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-mono text-sm text-success">+{coin.priceChangePercent.toFixed(2)}%</div>
+                        <div className="mt-1 font-mono text-xs text-muted-foreground">24H</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-mono">
+                      <div className="rounded border border-border bg-background/40 p-2">
+                        <div className="text-[10px] uppercase text-muted-foreground">Price</div>
+                        <div className="mt-1 text-foreground">{coin.price.toFixed(4)}</div>
+                      </div>
+                      <div className="rounded border border-border bg-background/40 p-2">
+                        <div className="text-[10px] uppercase text-muted-foreground">Signal</div>
+                        <div className="mt-1 text-success">Gainer</div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="hidden md:block">
+              <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="font-mono text-xs text-muted-foreground">SYMBOL</TableHead>
@@ -136,7 +178,8 @@ export default function Scanner() {
                   ))
                 )}
               </TableBody>
-            </Table>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 
@@ -148,7 +191,49 @@ export default function Scanner() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <Table>
+            <div className="space-y-2 p-3 md:hidden">
+              {losersLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="rounded-md border border-border bg-muted/20 p-3">
+                    <Skeleton className="h-4 w-20" />
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <Skeleton className="h-8 w-full" />
+                      <Skeleton className="h-8 w-full" />
+                      <Skeleton className="h-8 w-full" />
+                    </div>
+                  </div>
+                ))
+              ) : losers?.length === 0 ? (
+                <div className="py-6 text-center text-sm font-mono text-muted-foreground">NO LOSERS DETECTED</div>
+              ) : (
+                losers?.map((coin) => (
+                  <div key={`${coin.symbol}-${coin.id}`} className="rounded-md border border-border bg-muted/20 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-mono text-base font-bold text-foreground">{coin.symbol}</div>
+                        <div className="mt-1 text-xs font-mono text-muted-foreground">RVOL {coin.rvol.toFixed(1)}x</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-mono text-sm text-destructive">{coin.priceChangePercent.toFixed(2)}%</div>
+                        <div className="mt-1 font-mono text-xs text-muted-foreground">24H</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-mono">
+                      <div className="rounded border border-border bg-background/40 p-2">
+                        <div className="text-[10px] uppercase text-muted-foreground">Price</div>
+                        <div className="mt-1 text-foreground">{coin.price.toFixed(4)}</div>
+                      </div>
+                      <div className="rounded border border-border bg-background/40 p-2">
+                        <div className="text-[10px] uppercase text-muted-foreground">Signal</div>
+                        <div className="mt-1 text-destructive">Loser</div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="hidden md:block">
+              <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="font-mono text-xs text-muted-foreground">SYMBOL</TableHead>
@@ -182,7 +267,8 @@ export default function Scanner() {
                   ))
                 )}
               </TableBody>
-            </Table>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       </div>

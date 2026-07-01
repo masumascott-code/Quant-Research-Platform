@@ -47,7 +47,30 @@ export default function OpenTrades() {
         </div>
       </div>
 
-      <div className="rounded-md border border-border bg-card overflow-hidden">
+      <div className="space-y-3 md:hidden">
+        {isLoading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded-md border border-border bg-card p-4">
+              <Skeleton className="h-5 w-24" />
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                {Array.from({ length: 6 }).map((__, j) => (
+                  <Skeleton key={j} className="h-10 w-full" />
+                ))}
+              </div>
+            </div>
+          ))
+        ) : trades?.length === 0 ? (
+          <div className="rounded-md border border-border bg-card py-12 text-center text-sm font-mono text-muted-foreground">
+            NO OPEN POSITIONS
+          </div>
+        ) : (
+          trades?.map((trade) => (
+            <LiveTradeCard key={trade.id} trade={trade} livePrices={livePrices} />
+          ))
+        )}
+      </div>
+
+      <div className="hidden rounded-md border border-border bg-card overflow-hidden md:block">
         <Table>
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent bg-muted/30">
@@ -87,6 +110,106 @@ export default function OpenTrades() {
             )}
           </TableBody>
         </Table>
+      </div>
+    </div>
+  );
+}
+
+function LiveTradeCard({ trade, livePrices }: { trade: any; livePrices: Record<string, any> }) {
+  const liveData = livePrices[trade.symbol];
+  const markPrice = liveData?.price ?? null;
+  const prevPriceRef = useRef<number | null>(null);
+  const [flash, setFlash] = useState<"up" | "down" | null>(null);
+
+  useEffect(() => {
+    if (markPrice == null) return undefined;
+    if (prevPriceRef.current != null && markPrice !== prevPriceRef.current) {
+      setFlash(markPrice > prevPriceRef.current ? "up" : "down");
+      const t = setTimeout(() => setFlash(null), 600);
+      prevPriceRef.current = markPrice;
+      return () => clearTimeout(t);
+    }
+    prevPriceRef.current = markPrice;
+    return undefined;
+  }, [markPrice]);
+
+  const livePnl = markPrice != null ? calcPnl(trade, markPrice) : null;
+  const livePnlPct = markPrice != null ? calcPnlPct(trade, markPrice) : null;
+
+  const flashClass =
+    flash === "up" ? "bg-success/10 transition-colors duration-300" :
+    flash === "down" ? "bg-destructive/10 transition-colors duration-300" : "bg-card";
+
+  return (
+    <div className={`rounded-md border border-border p-4 ${flashClass}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="font-mono text-lg font-bold text-foreground">{trade.symbol}</div>
+          <div className="mt-1 text-[10px] font-mono text-muted-foreground">{trade.tradeId?.slice(0, 8)}</div>
+        </div>
+        <Badge variant="outline" className={`font-mono text-xs ${trade.direction === 'LONG' ? 'text-success border-success/30 bg-success/10' : 'text-destructive border-destructive/30 bg-destructive/10'}`}>
+          {trade.direction}
+        </Badge>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2 text-xs font-mono">
+        <div className="rounded border border-border bg-muted/30 p-2">
+          <div className="text-[10px] uppercase text-muted-foreground">Entry</div>
+          <div className="mt-1 text-foreground">{Number(trade.entryPrice).toFixed(4)}</div>
+        </div>
+        <div className="rounded border border-border bg-muted/30 p-2">
+          <div className="text-[10px] uppercase text-muted-foreground">Mark</div>
+          <div className={flash === "up" ? "mt-1 text-success font-semibold" : flash === "down" ? "mt-1 text-destructive font-semibold" : "mt-1 text-foreground"}>
+            {markPrice != null ? markPrice.toFixed(4) : "---"}
+          </div>
+        </div>
+        <div className="rounded border border-border bg-muted/30 p-2">
+          <div className="text-[10px] uppercase text-muted-foreground">Live PnL</div>
+          {livePnl != null ? (
+            <div className={livePnl > 0 ? "mt-1 text-success font-bold" : livePnl < 0 ? "mt-1 text-destructive font-bold" : "mt-1 text-muted-foreground"}>
+              {livePnl > 0 ? "+" : ""}{livePnl.toFixed(4)}
+              <span className="ml-1 text-[10px] font-normal">
+                ({livePnlPct! > 0 ? "+" : ""}{livePnlPct!.toFixed(2)}%)
+              </span>
+            </div>
+          ) : (
+            <div className="mt-1 text-muted-foreground">---</div>
+          )}
+        </div>
+        <div className="rounded border border-border bg-muted/30 p-2">
+          <div className="text-[10px] uppercase text-muted-foreground">Stop Loss</div>
+          <div className="mt-1 flex items-center gap-1 text-muted-foreground">
+            <Shield className="h-3 w-3" />
+            {Number(trade.currentSl || trade.stopLoss).toFixed(4)}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono uppercase text-muted-foreground">TP</span>
+          {[
+            { hit: trade.tp1Hit, price: trade.tp1, label: "TP1" },
+            { hit: trade.tp2Hit, price: trade.tp2, label: "TP2" },
+            { hit: trade.tp3Hit, price: trade.tp3, label: "TP3" },
+          ].map(({ hit, price, label }) => {
+            const nearTarget = markPrice != null && !hit && Math.abs(markPrice - price) / price < 0.005;
+            return (
+              <div
+                key={label}
+                title={`${label}: ${price}`}
+                className={`h-4 w-4 rounded-sm transition-all ${
+                  hit
+                    ? "bg-success"
+                    : nearTarget
+                    ? "bg-yellow-500 animate-pulse"
+                    : "bg-muted border border-border"
+                }`}
+              />
+            );
+          })}
+        </div>
+        <CloseTradeDialog trade={trade} markPrice={markPrice} />
       </div>
     </div>
   );
