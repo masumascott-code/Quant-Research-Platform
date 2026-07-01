@@ -164,12 +164,34 @@ export class ScannerService {
       const t = tickers[i];
       const [coin] = await db.select().from(coinsTable).where(eq(coinsTable.symbol, t.symbol));
       if (!coin) continue;
+      const rvol = await this.getSnapshotRvol(t.symbol, config);
       await db.insert(marketSnapshotsTable).values({
         coinId: coin.id, symbol: t.symbol, price: t.lastPrice,
         priceChangePercent: t.priceChangePercent, volume24h: t.quoteVolume,
-        rvol: String(config.snapshotRvolFallback), rank: i + 1, listType, scannedAt: new Date(),
+        rvol: rvol.toFixed(4), rank: i + 1, listType, scannedAt: new Date(),
       }).onConflictDoNothing();
     }
+  }
+
+  private async getSnapshotRvol(symbol: string, config: ScannerRuntimeConfig): Promise<number> {
+    try {
+      const candles15m = await this.fetchCandles(symbol, "15m", config.candles15mLimit, config);
+      return this.calculateRvol(candles15m, config.volumeLookback) ?? config.snapshotRvolFallback;
+    } catch (err) {
+      logger.warn({ err, symbol }, "Failed to calculate snapshot RVOL - using fallback");
+      return config.snapshotRvolFallback;
+    }
+  }
+
+  private calculateRvol(candles: CandleData[], lookback: number): number | null {
+    if (candles.length < lookback + 1) return null;
+
+    const currentVolume = candles[candles.length - 1]?.volume;
+    const previousVolumes = candles.slice(-lookback - 1, -1);
+    const averageVolume = previousVolumes.reduce((sum, candle) => sum + candle.volume, 0) / lookback;
+    const rvol = averageVolume > 0 && currentVolume != null ? currentVolume / averageVolume : null;
+
+    return rvol != null && Number.isFinite(rvol) && rvol > 0 ? rvol : null;
   }
 
   private async analyzeSymbol(ticker: TickerData, direction: "LONG" | "SHORT", canOpenTrade: boolean, runtimeConfig: RuntimeConfig) {
@@ -183,8 +205,7 @@ export class ScannerService {
       const candles15m = await this.fetchCandles(symbol, "15m", config.candles15mLimit, config);
       if (candles15m.length < config.minCandles15m) return;
 
-      const avgVol = candles15m.slice(-config.volumeLookback - 1, -1).reduce((a, b) => a + b.volume, 0) / config.volumeLookback;
-      const rvol = avgVol > 0 ? candles15m[candles15m.length - 1].volume / avgVol : 1;
+      const rvol = this.calculateRvol(candles15m, config.volumeLookback) ?? 1;
       if (rvol < config.minRvol) return;
 
       // Fetch all timeframes for multi-TF analysis
