@@ -60,7 +60,9 @@ function validateRuntimeConfigEnvironment(): void {
   if (invalidValues.length === 0) return;
 
   const errors = invalidValues.map((issue) => issue.message);
-  throw new Error(`Invalid runtime configuration environment variables: ${errors.join("; ")}`);
+  throw new Error(
+    `Invalid runtime configuration environment variables: ${errors.join("; ")}`,
+  );
 }
 
 export function boolEnv(name: string, fallback: boolean): boolean {
@@ -76,15 +78,28 @@ export function numberEnv(name: string, fallback: number): number {
   return Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
-export function positiveIntegerEnv(name: string, fallback: number, expected = "positive integer"): number {
+export function positiveIntegerEnv(
+  name: string,
+  fallback: number,
+  expected = "positive integer",
+): number {
   return integerEnv(name, fallback, 1, expected);
 }
 
-export function nonNegativeIntegerEnv(name: string, fallback: number, expected = "non-negative integer"): number {
+export function nonNegativeIntegerEnv(
+  name: string,
+  fallback: number,
+  expected = "non-negative integer",
+): number {
   return integerEnv(name, fallback, 0, expected);
 }
 
-function integerEnv(name: string, fallback: number, min: number, expected: string): number {
+function integerEnv(
+  name: string,
+  fallback: number,
+  min: number,
+  expected: string,
+): number {
   const raw = process.env[name];
   if (raw == null || raw.trim() === "") return fallback;
 

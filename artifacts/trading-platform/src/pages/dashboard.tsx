@@ -392,7 +392,9 @@ function ScannerDiagnosticsPanel() {
                       <TableHead className="font-mono text-xs text-muted-foreground">TIME</TableHead>
                       <TableHead className="font-mono text-xs text-muted-foreground">SYMBOL</TableHead>
                       <TableHead className="font-mono text-xs text-muted-foreground">DECISION</TableHead>
-                      <TableHead className="font-mono text-xs text-muted-foreground text-right">SCORE</TableHead>
+                      <TableHead className="font-mono text-xs text-muted-foreground text-right">
+                        {showScanActivity ? "CHANGE" : "SCORE"}
+                      </TableHead>
                       <TableHead className="font-mono text-xs text-muted-foreground">REASON</TableHead>
                     </TableRow>
                   </TableHeader>
