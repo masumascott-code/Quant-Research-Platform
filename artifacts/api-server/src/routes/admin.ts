@@ -8,6 +8,63 @@ import { ScannerService } from "../services/scanner";
 
 const router = Router();
 
+class SettingsValidationError extends Error {}
+
+type SettingsRow = {
+  key: string;
+  value: string;
+  updatedAt: Date;
+};
+
+function buildValuesToPersist(settings: Record<string, string>): Map<string, string> {
+  const valuesToPersist = new Map<string, string>();
+  const canonicalValues = new Map<string, string>();
+
+  const entries = Object.entries(settings);
+  for (const [key, value] of entries) {
+    valuesToPersist.set(key, value);
+    const normalized = ConfigurationValidator.normalizeEntry(key, value);
+    if (normalized && normalized.key === key) {
+      canonicalValues.set(normalized.key, normalized.value);
+    }
+  }
+
+  for (const [key, value] of entries) {
+    const normalized = ConfigurationValidator.normalizeEntry(key, value);
+    if (normalized && normalized.key !== key) {
+      canonicalValues.set(normalized.key, normalized.value);
+    }
+  }
+
+  for (const [key, value] of canonicalValues) {
+    valuesToPersist.set(key, value);
+  }
+
+  return valuesToPersist;
+}
+
+function applySettingValue(candidate: Record<string, string>, key: string, value: string): void {
+  candidate[key] = value;
+  const normalized = ConfigurationValidator.normalizeEntry(key, value);
+  if (normalized) {
+    candidate[normalized.key] = normalized.value;
+  }
+}
+
+function buildCandidateSettings(rows: SettingsRow[], valuesToPersist: Map<string, string>): Record<string, string> {
+  const candidate: Record<string, string> = {};
+
+  for (const row of rows.sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime())) {
+    applySettingValue(candidate, row.key, row.value);
+  }
+
+  for (const [key, value] of valuesToPersist) {
+    applySettingValue(candidate, key, value);
+  }
+
+  return candidate;
+}
+
 router.get("/settings", async (req, res) => {
   try {
     const rows = await db.select().from(systemSettingsTable);
@@ -28,27 +85,14 @@ router.get("/settings", async (req, res) => {
 router.post("/settings", async (req, res) => {
   try {
     const { settings } = req.body as { settings: Record<string, string> };
-    const valuesToPersist = new Map<string, string>();
-    const canonicalValues = new Map<string, string>();
+    const valuesToPersist = buildValuesToPersist(settings);
+    const existingRows = await db.select().from(systemSettingsTable);
+    const candidateSettings = buildCandidateSettings(existingRows, valuesToPersist);
 
-    const entries = Object.entries(settings);
-    for (const [key, value] of entries) {
-      valuesToPersist.set(key, value);
-      const normalized = ConfigurationValidator.normalizeEntry(key, value);
-      if (normalized && normalized.key === key) {
-        canonicalValues.set(normalized.key, normalized.value);
-      }
-    }
-
-    for (const [key, value] of entries) {
-      const normalized = ConfigurationValidator.normalizeEntry(key, value);
-      if (normalized && normalized.key !== key) {
-        canonicalValues.set(normalized.key, normalized.value);
-      }
-    }
-
-    for (const [key, value] of canonicalValues) {
-      valuesToPersist.set(key, value);
+    try {
+      ConfigurationValidator.validateScannerTradeLimitsForSave(candidateSettings);
+    } catch (err) {
+      throw new SettingsValidationError((err as Error).message);
     }
 
     for (const [key, value] of valuesToPersist) {
@@ -63,6 +107,10 @@ router.post("/settings", async (req, res) => {
     await configService.reload();
     res.json({ success: true });
   } catch (err) {
+    if (err instanceof SettingsValidationError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     res.status(500).json({ error: "Failed to update settings" });
   }
 });

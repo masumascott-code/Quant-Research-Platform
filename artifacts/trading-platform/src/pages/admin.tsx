@@ -141,7 +141,11 @@ export default function Admin() {
       toast({ title: "Settings saved", description: "Configuration updated successfully." });
       qc.invalidateQueries({ queryKey: ["admin-settings"] });
     },
-    onError: () => toast({ title: "Error", description: "Failed to save settings.", variant: "destructive" }),
+    onError: (error) => toast({
+      title: "Error",
+      description: error instanceof Error ? error.message : "Failed to save settings.",
+      variant: "destructive",
+    }),
   });
 
   const pauseMutation = useMutation({

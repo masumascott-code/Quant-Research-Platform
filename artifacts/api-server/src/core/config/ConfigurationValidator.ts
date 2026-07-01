@@ -353,6 +353,23 @@ function getPath(config: RuntimeConfig, path: ConfigPath): RuntimeConfigValue {
   return (config[section] as unknown as Record<string, RuntimeConfigValue>)[key];
 }
 
+function parseRawValuesWithoutValidation(rawValues: Record<string, string | undefined>): RuntimeConfig {
+  const config = cloneDefaultConfig();
+
+  for (const [rawKey, rawValue] of Object.entries(rawValues)) {
+    if (rawValue == null || rawValue.trim() === "") continue;
+    const normalized = ConfigurationValidator.normalizeEntry(rawKey, rawValue);
+    if (!normalized) continue;
+    const { key } = normalized;
+    const kind = CONFIG_VALUE_KINDS[key];
+    const value = coerceValue(normalized.value, kind);
+    if (value == null) continue;
+    setPath(config, key, value);
+  }
+
+  return config;
+}
+
 export class ConfigurationValidator {
   static canonicalKeys(): ConfigPath[] {
     return Object.keys(CONFIG_VALUE_KINDS) as ConfigPath[];
@@ -400,20 +417,16 @@ export class ConfigurationValidator {
   }
 
   static parseRawValues(rawValues: Record<string, string | undefined>): RuntimeConfig {
-    const config = this.defaults();
+    return this.validate(parseRawValuesWithoutValidation(rawValues));
+  }
 
-    for (const [rawKey, rawValue] of Object.entries(rawValues)) {
-      if (rawValue == null || rawValue.trim() === "") continue;
-      const normalized = this.normalizeEntry(rawKey, rawValue);
-      if (!normalized) continue;
-      const { key } = normalized;
-      const kind = CONFIG_VALUE_KINDS[key];
-      const value = coerceValue(normalized.value, kind);
-      if (value == null) continue;
-      setPath(config, key, value);
+  static validateScannerTradeLimitsForSave(rawValues: Record<string, string | undefined>): void {
+    const config = parseRawValuesWithoutValidation(rawValues);
+    if (config.scanner.maxDailyTrades > config.scanner.maxWeeklyTrades) {
+      throw new Error(
+        `scanner.maxDailyTrades=${config.scanner.maxDailyTrades} cannot exceed scanner.maxWeeklyTrades=${config.scanner.maxWeeklyTrades}`,
+      );
     }
-
-    return this.validate(config);
   }
 
   static flatten(config: RuntimeConfig, includeLegacyAliases = false): FlatRuntimeConfig {
