@@ -7,6 +7,7 @@ import { logger } from "../lib/logger";
 export interface AuthContext {
   username: string;
   role: Role;
+  userId?: number;
 }
 
 declare global {
@@ -52,7 +53,7 @@ export function authenticateCredentials(
 
 export function issueToken(user: AuthContext): { token: string; expiresIn: number } {
   return {
-    token: createJwt(user.username, user.role),
+    token: createJwt(user.username, user.role, user.userId),
     expiresIn: securityConfig.jwtExpiresInSeconds,
   };
 }
@@ -61,6 +62,7 @@ function authFromPayload(payload: JwtPayload): AuthContext {
   return {
     username: payload.sub,
     role: payload.role,
+    ...(payload.userId == null ? {} : { userId: payload.userId }),
   };
 }
 

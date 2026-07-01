@@ -4,6 +4,7 @@ import { securityConfig, type Role } from "../config/security";
 export interface JwtPayload {
   sub: string;
   role: Role;
+  userId?: number;
   iss: string;
   aud: string;
   iat: number;
@@ -37,20 +38,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parsePayload(value: unknown): JwtPayload | null {
   if (!isRecord(value)) return null;
 
-  const { sub, role, iss, aud, iat, exp } = value;
+  const { sub, role, userId, iss, aud, iat, exp } = value;
   if (typeof sub !== "string") return null;
   if (role !== "admin" && role !== "viewer") return null;
+  if (userId !== undefined && typeof userId !== "number") return null;
   if (typeof iss !== "string" || typeof aud !== "string") return null;
   if (typeof iat !== "number" || typeof exp !== "number") return null;
 
-  return { sub, role, iss, aud, iat, exp };
+  return { sub, role, userId, iss, aud, iat, exp };
 }
 
-export function createJwt(subject: string, role: Role): string {
+export function createJwt(subject: string, role: Role, userId?: number): string {
   const now = Math.floor(Date.now() / 1000);
   const payload: JwtPayload = {
     sub: subject,
     role,
+    ...(userId == null ? {} : { userId }),
     iss: securityConfig.jwtIssuer,
     aud: securityConfig.jwtAudience,
     iat: now,

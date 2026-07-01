@@ -63,6 +63,44 @@ paths:
         "401":
           description: Invalid credentials
 
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Request a new viewer account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "202":
+          description: Registration request accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterResult"
+        "400":
+          description: Invalid registration input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Registration is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Registration is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /auth/me:
     get:
       operationId: getCurrentUser
@@ -541,6 +579,8 @@ components:
       type: object
       required: [username, role]
       properties:
+        userId:
+          type: integer
         username:
           type: string
         role:
@@ -555,6 +595,39 @@ components:
         password:
           type: string
           format: password
+
+    RegisterInput:
+      type: object
+      required: [email, username, password]
+      properties:
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: "^[a-zA-Z0-9._-]+$"
+        password:
+          type: string
+          format: password
+          minLength: 12
+          maxLength: 1024
+
+    RegistrationStatus:
+      type: string
+      enum: [pending, active]
+
+    RegisterResult:
+      type: object
+      required: [success, status, message]
+      properties:
+        success:
+          type: boolean
+        status:
+          $ref: "#/components/schemas/RegistrationStatus"
+        message:
+          type: string
 
     AuthLoginResult:
       type: object
@@ -584,6 +657,13 @@ components:
         success:
           type: boolean
         message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
           type: string
 
     ScannerStatus:

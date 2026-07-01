@@ -33,7 +33,7 @@ function csvEnv(name: string): string[] {
 
 const isProduction = process.env.NODE_ENV === "production";
 const authEnabled = boolEnv("AUTH_ENABLED", true);
-const { registrationEnabled, registrationAutoApprove } = registrationFlagsFromEnv(process.env);
+const { registrationEnabled, registrationAutoApprove } = registrationFlagsForRuntime(process.env, isProduction);
 
 const jwtSecret = process.env.JWT_SECRET ??
   (isProduction ? "" : "dev-only-change-me-32-characters-minimum");
@@ -92,4 +92,20 @@ export function registrationFlagsFromEnv(env: NodeJS.ProcessEnv): {
     registrationEnabled: boolValue(env.REGISTRATION_ENABLED, false),
     registrationAutoApprove: boolValue(env.REGISTRATION_AUTO_APPROVE, false),
   };
+}
+
+export function registrationFlagsForRuntime(env: NodeJS.ProcessEnv, production: boolean): {
+  registrationEnabled: boolean;
+  registrationAutoApprove: boolean;
+} {
+  const flags = registrationFlagsFromEnv(env);
+  if (production && flags.registrationAutoApprove) {
+    logger.warn("REGISTRATION_AUTO_APPROVE is ignored in production; new public users remain pending.");
+    return {
+      ...flags,
+      registrationAutoApprove: false,
+    };
+  }
+
+  return flags;
 }

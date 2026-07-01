@@ -10,14 +10,22 @@ export async function findUserByNormalizedEmailOrUsername(identifier: string): P
   const normalizedIdentifier = identifier.trim().toLowerCase();
   if (!normalizedIdentifier) return null;
 
-  const [user] = await db
-    .select()
-    .from(appUsersTable)
-    .where(or(
-      eq(appUsersTable.normalizedEmail, normalizedIdentifier),
-      eq(appUsersTable.normalizedUsername, normalizedIdentifier),
-    ))
-    .limit(1);
+  let user: AppUser | undefined;
+  try {
+    [user] = await db
+      .select()
+      .from(appUsersTable)
+      .where(or(
+        eq(appUsersTable.normalizedEmail, normalizedIdentifier),
+        eq(appUsersTable.normalizedUsername, normalizedIdentifier),
+      ))
+      .limit(1);
+  } catch (err) {
+    if (isAuthUserSchemaUnavailable(err)) {
+      return null;
+    }
+    throw err;
+  }
 
   return user ?? null;
 }
@@ -59,4 +67,10 @@ export async function updateLastLoginAt(userId: number): Promise<void> {
     .update(appUsersTable)
     .set({ lastLoginAt: new Date(), updatedAt: new Date() })
     .where(and(eq(appUsersTable.id, userId), eq(appUsersTable.status, "active")));
+}
+
+export function isAuthUserSchemaUnavailable(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const record = err as Record<string, unknown>;
+  return record.code === "42P01";
 }

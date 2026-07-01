@@ -7,6 +7,19 @@ import {
   issueToken,
   rateLimit,
 } from "../middleware/security";
+import {
+  authenticateDbUserOrFallback,
+  registerPublicUser,
+  registrationAcceptedMessage,
+  validateRegistrationBody,
+} from "../core/auth/service";
+import {
+  createPendingViewerUser,
+  findUserByNormalizedEmailOrUsername,
+  isAuthUserSchemaUnavailable,
+  verifyDbUserPassword,
+  updateLastLoginAt,
+} from "../core/auth/users";
 
 const router = Router();
 
@@ -22,7 +35,41 @@ function parseLoginBody(body: unknown): { username: string; password: string } |
   };
 }
 
-router.post("/login", rateLimit(securityConfig.authRateLimitMax), (req, res) => {
+router.post("/register", rateLimit(securityConfig.authRateLimitMax), async (req, res) => {
+  if (!securityConfig.authEnabled || !securityConfig.registrationEnabled) {
+    res.status(404).json({ error: "Registration is not available" });
+    return;
+  }
+
+  const parsed = validateRegistrationBody(req.body);
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.message });
+    return;
+  }
+
+  let registration;
+  try {
+    registration = await registerPublicUser(parsed.input, {
+      findUserByIdentifier: findUserByNormalizedEmailOrUsername,
+      createUser: createPendingViewerUser,
+      autoApprove: securityConfig.registrationAutoApprove,
+    });
+  } catch (err) {
+    if (isAuthUserSchemaUnavailable(err)) {
+      res.status(503).json({ error: "Registration is temporarily unavailable" });
+      return;
+    }
+    throw err;
+  }
+
+  res.status(202).json({
+    success: true,
+    status: registration.status,
+    message: registrationAcceptedMessage(registration.status),
+  });
+});
+
+router.post("/login", rateLimit(securityConfig.authRateLimitMax), async (req, res) => {
   if (!securityConfig.authEnabled) {
     res.status(403).json({ error: "Authentication is disabled" });
     return;
@@ -34,7 +81,12 @@ router.post("/login", rateLimit(securityConfig.authRateLimitMax), (req, res) => 
     return;
   }
 
-  const user = authenticateCredentials(parsed.username, parsed.password);
+  const user = await authenticateDbUserOrFallback(parsed.username, parsed.password, {
+    findUserByIdentifier: findUserByNormalizedEmailOrUsername,
+    verifyPassword: verifyDbUserPassword,
+    updateLastLoginAt,
+    authenticateFallback: authenticateCredentials,
+  });
   if (!user) {
     auditAuthAttempt(req, parsed.username, false);
     res.status(401).json({ error: "Invalid username or password" });
