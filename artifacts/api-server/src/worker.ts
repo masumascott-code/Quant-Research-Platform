@@ -1,6 +1,6 @@
 import { Worker } from "bullmq";
 import { pool } from "@workspace/db";
-import { validateProductionEnvironment } from "./infra/env";
+import { positiveIntegerEnv, validateProductionEnvironment } from "./infra/env";
 import { jobHandlers } from "./infra/jobs";
 import { queueJobDuration, queueJobsTotal } from "./infra/metrics";
 import { queueManager } from "./infra/queue";
@@ -9,6 +9,11 @@ import { logger } from "./lib/logger";
 validateProductionEnvironment();
 
 const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
+const workerConcurrency = positiveIntegerEnv(
+  "WORKER_CONCURRENCY",
+  2,
+  "positive integer worker concurrency",
+);
 const queues = (process.env.WORKER_QUEUES ?? "reports,maintenance,scanner")
   .split(",")
   .map((queue) => queue.trim())
@@ -49,7 +54,7 @@ const workers = queues.map(
       },
       {
         connection: { url: redisUrl },
-        concurrency: Number(process.env.WORKER_CONCURRENCY ?? 2),
+        concurrency: workerConcurrency,
       },
     ),
 );

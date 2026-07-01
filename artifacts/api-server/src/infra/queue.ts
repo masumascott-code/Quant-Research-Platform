@@ -1,6 +1,6 @@
 import { Queue, QueueEvents, type JobsOptions } from "bullmq";
 import { logger } from "../lib/logger";
-import { boolEnv } from "./env";
+import { boolEnv, nonNegativeIntegerEnv, positiveIntegerEnv } from "./env";
 
 export type QueueName = "reports" | "maintenance" | "scanner" | "dead-letter";
 
@@ -20,6 +20,26 @@ class QueueManager {
   private queueEvents = new Map<QueueName, QueueEvents>();
   private readonly enabled = boolEnv("QUEUE_ENABLED", true);
   private readonly redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
+  private readonly jobAttempts = positiveIntegerEnv(
+    "QUEUE_JOB_ATTEMPTS",
+    3,
+    "positive integer attempt count",
+  );
+  private readonly jobBackoffMs = nonNegativeIntegerEnv(
+    "QUEUE_JOB_BACKOFF_MS",
+    5_000,
+    "non-negative integer milliseconds",
+  );
+  private readonly removeCompleteAgeSeconds = nonNegativeIntegerEnv(
+    "QUEUE_REMOVE_COMPLETE_AGE_SECONDS",
+    86_400,
+    "non-negative integer seconds",
+  );
+  private readonly removeCompleteCount = nonNegativeIntegerEnv(
+    "QUEUE_REMOVE_COMPLETE_COUNT",
+    1_000,
+    "non-negative integer count",
+  );
 
   getQueue(name: QueueName): Queue {
     const existing = this.queues.get(name);
@@ -28,14 +48,14 @@ class QueueManager {
     const queue = new Queue(name, {
       connection: { url: this.redisUrl },
       defaultJobOptions: {
-        attempts: Number(process.env.QUEUE_JOB_ATTEMPTS ?? 3),
+        attempts: this.jobAttempts,
         backoff: {
           type: "exponential",
-          delay: Number(process.env.QUEUE_JOB_BACKOFF_MS ?? 5_000),
+          delay: this.jobBackoffMs,
         },
         removeOnComplete: {
-          age: Number(process.env.QUEUE_REMOVE_COMPLETE_AGE_SECONDS ?? 86_400),
-          count: Number(process.env.QUEUE_REMOVE_COMPLETE_COUNT ?? 1_000),
+          age: this.removeCompleteAgeSeconds,
+          count: this.removeCompleteCount,
         },
         removeOnFail: false,
       },

@@ -140,6 +140,13 @@ type ConfigPath =
   | "notifications.telegramEnabled";
 
 type ValueKind = "string" | "number" | "boolean" | "stringArray";
+type RawValueValidationIssue = {
+  rawKey: string;
+  message: string;
+};
+
+const TRUE_BOOLEAN_VALUES = new Set(["1", "true", "yes", "on"]);
+const FALSE_BOOLEAN_VALUES = new Set(["0", "false", "no", "off"]);
 
 const CONFIG_VALUE_KINDS: Record<ConfigPath, ValueKind> = {
   "scanner.binanceBaseUrl": "string",
@@ -337,9 +344,36 @@ function coerceValue(raw: string, kind: ValueKind): RuntimeConfigValue | null {
       return Number.isFinite(value) ? value : null;
     }
     case "boolean":
-      return ["1", "true", "yes", "on"].includes(raw.trim().toLowerCase());
+      return TRUE_BOOLEAN_VALUES.has(raw.trim().toLowerCase());
     case "stringArray":
       return raw.split(",").map((value) => value.trim()).filter(Boolean);
+  }
+}
+
+function expectedValueDescription(kind: ValueKind): string {
+  switch (kind) {
+    case "number":
+      return "finite number";
+    case "boolean":
+      return "boolean (true/false, 1/0, yes/no, or on/off)";
+    case "stringArray":
+      return "comma-separated string list";
+    case "string":
+      return "string";
+  }
+}
+
+function isValidRawValue(raw: string, kind: ValueKind): boolean {
+  switch (kind) {
+    case "number":
+      return Number.isFinite(Number(raw));
+    case "boolean": {
+      const normalized = raw.trim().toLowerCase();
+      return TRUE_BOOLEAN_VALUES.has(normalized) || FALSE_BOOLEAN_VALUES.has(normalized);
+    }
+    case "string":
+    case "stringArray":
+      return true;
   }
 }
 
@@ -418,6 +452,31 @@ export class ConfigurationValidator {
 
   static parseRawValues(rawValues: Record<string, string | undefined>): RuntimeConfig {
     return this.validate(parseRawValuesWithoutValidation(rawValues));
+  }
+
+  static invalidRawValues(
+    rawValues: Record<string, string | undefined>,
+    displayKeyFor: (rawKey: string, normalizedKey: ConfigPath) => string = (rawKey) => rawKey,
+  ): RawValueValidationIssue[] {
+    const issues: RawValueValidationIssue[] = [];
+
+    for (const [rawKey, rawValue] of Object.entries(rawValues)) {
+      if (rawValue == null || rawValue.trim() === "") continue;
+
+      const normalized = this.normalizeEntry(rawKey, rawValue);
+      if (!normalized) continue;
+
+      const kind = CONFIG_VALUE_KINDS[normalized.key];
+      if (isValidRawValue(normalized.value, kind)) continue;
+
+      const displayKey = displayKeyFor(rawKey, normalized.key);
+      issues.push({
+        rawKey,
+        message: `Invalid ${displayKey}: expected ${expectedValueDescription(kind)}.`,
+      });
+    }
+
+    return issues;
   }
 
   static validateScannerTradeLimitsForSave(rawValues: Record<string, string | undefined>): void {

@@ -1,5 +1,5 @@
 import { logger } from "../lib/logger";
-import { boolEnv } from "./env";
+import { boolEnv, positiveIntegerEnv } from "./env";
 import { queueManager, type QueueJobDefinition } from "./queue";
 
 interface ScheduledJob {
@@ -14,7 +14,11 @@ export class Scheduler {
   private jobs: ScheduledJob[] = [
     {
       name: "daily-report",
-      intervalMs: Number(process.env.SCHEDULE_DAILY_REPORT_MS ?? 86_400_000),
+      intervalMs: positiveIntegerEnv(
+        "SCHEDULE_DAILY_REPORT_MS",
+        86_400_000,
+        "positive integer milliseconds",
+      ),
       job: {
         queue: "reports",
         name: "daily-report",
@@ -23,7 +27,11 @@ export class Scheduler {
     },
     {
       name: "weekly-report",
-      intervalMs: Number(process.env.SCHEDULE_WEEKLY_REPORT_MS ?? 604_800_000),
+      intervalMs: positiveIntegerEnv(
+        "SCHEDULE_WEEKLY_REPORT_MS",
+        604_800_000,
+        "positive integer milliseconds",
+      ),
       job: {
         queue: "reports",
         name: "weekly-report",
@@ -32,8 +40,10 @@ export class Scheduler {
     },
     {
       name: "adaptive-learning",
-      intervalMs: Number(
-        process.env.SCHEDULE_ADAPTIVE_LEARNING_MS ?? 86_400_000,
+      intervalMs: positiveIntegerEnv(
+        "SCHEDULE_ADAPTIVE_LEARNING_MS",
+        86_400_000,
+        "positive integer milliseconds",
       ),
       job: {
         queue: "reports",
@@ -43,7 +53,11 @@ export class Scheduler {
     },
     {
       name: "scanner-cleanup",
-      intervalMs: Number(process.env.SCHEDULE_SCANNER_CLEANUP_MS ?? 86_400_000),
+      intervalMs: positiveIntegerEnv(
+        "SCHEDULE_SCANNER_CLEANUP_MS",
+        86_400_000,
+        "positive integer milliseconds",
+      ),
       job: {
         queue: "maintenance",
         name: "scanner-cleanup",
@@ -52,8 +66,10 @@ export class Scheduler {
     },
     {
       name: "market-snapshot-cleanup",
-      intervalMs: Number(
-        process.env.SCHEDULE_MARKET_SNAPSHOT_CLEANUP_MS ?? 86_400_000,
+      intervalMs: positiveIntegerEnv(
+        "SCHEDULE_MARKET_SNAPSHOT_CLEANUP_MS",
+        86_400_000,
+        "positive integer milliseconds",
       ),
       job: {
         queue: "maintenance",
@@ -63,8 +79,10 @@ export class Scheduler {
     },
     {
       name: "database-cleanup",
-      intervalMs: Number(
-        process.env.SCHEDULE_DATABASE_CLEANUP_MS ?? 86_400_000,
+      intervalMs: positiveIntegerEnv(
+        "SCHEDULE_DATABASE_CLEANUP_MS",
+        86_400_000,
+        "positive integer milliseconds",
       ),
       job: {
         queue: "maintenance",

@@ -1,4 +1,5 @@
 import { logger } from "../lib/logger";
+import { ConfigurationValidator } from "../core/config/ConfigurationValidator";
 
 const productionRequired = [
   "DATABASE_URL",
@@ -34,6 +35,8 @@ export function validateProductionEnvironment(): void {
     throw new Error("AUTH_ENABLED=false is not allowed in production.");
   }
 
+  validateRuntimeConfigEnvironment();
+
   for (const name of optionalProductionWarnings) {
     if (!process.env[name]?.trim()) {
       logger.warn(
@@ -42,6 +45,22 @@ export function validateProductionEnvironment(): void {
       );
     }
   }
+}
+
+function validateRuntimeConfigEnvironment(): void {
+  const envValues: Record<string, string | undefined> = {};
+  for (const key of ConfigurationValidator.canonicalKeys()) {
+    envValues[key] = process.env[ConfigurationValidator.envKeyFor(key)];
+  }
+
+  const invalidValues = ConfigurationValidator.invalidRawValues(
+    envValues,
+    (_rawKey, normalizedKey) => ConfigurationValidator.envKeyFor(normalizedKey),
+  );
+  if (invalidValues.length === 0) return;
+
+  const errors = invalidValues.map((issue) => issue.message);
+  throw new Error(`Invalid runtime configuration environment variables: ${errors.join("; ")}`);
 }
 
 export function boolEnv(name: string, fallback: boolean): boolean {
@@ -55,4 +74,22 @@ export function numberEnv(name: string, fallback: number): number {
   if (raw == null || raw.trim() === "") return fallback;
   const value = Number(raw);
   return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+export function positiveIntegerEnv(name: string, fallback: number, expected = "positive integer"): number {
+  return integerEnv(name, fallback, 1, expected);
+}
+
+export function nonNegativeIntegerEnv(name: string, fallback: number, expected = "non-negative integer"): number {
+  return integerEnv(name, fallback, 0, expected);
+}
+
+function integerEnv(name: string, fallback: number, min: number, expected: string): number {
+  const raw = process.env[name];
+  if (raw == null || raw.trim() === "") return fallback;
+
+  const value = Number(raw);
+  if (Number.isInteger(value) && value >= min) return value;
+
+  throw new Error(`Invalid ${name}: expected ${expected}.`);
 }

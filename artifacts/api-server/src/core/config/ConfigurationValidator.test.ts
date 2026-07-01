@@ -47,3 +47,26 @@ test("validateScannerTradeLimitsForSave validates partial candidate updates agai
     /scanner\.maxDailyTrades=20 cannot exceed scanner\.maxWeeklyTrades=15/,
   );
 });
+
+test("invalidRawValues reports invalid QE numeric values without exposing raw values", () => {
+  const issues = ConfigurationValidator.invalidRawValues(
+    { "scanner.maxDailyTrades": "not-a-number" },
+    (_rawKey, normalizedKey) => ConfigurationValidator.envKeyFor(normalizedKey),
+  );
+
+  assert.deepEqual(issues, [
+    {
+      rawKey: "scanner.maxDailyTrades",
+      message: "Invalid QE_SCANNER_MAX_DAILY_TRADES: expected finite number.",
+    },
+  ]);
+});
+
+test("invalidRawValues accepts valid QE numeric values", () => {
+  const issues = ConfigurationValidator.invalidRawValues(
+    { "scanner.maxDailyTrades": "15" },
+    (_rawKey, normalizedKey) => ConfigurationValidator.envKeyFor(normalizedKey),
+  );
+
+  assert.deepEqual(issues, []);
+});
