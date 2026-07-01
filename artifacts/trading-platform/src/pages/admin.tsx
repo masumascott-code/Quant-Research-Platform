@@ -9,10 +9,10 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Settings, Shield, AlertTriangle, Play, Pause,
-  Activity, Zap, RefreshCw
+  Activity, Zap, RefreshCw, Users, UserCheck, UserX
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiFetch } from "@/lib/api-fetch";
+import { ApiError, apiFetch } from "@/lib/api-fetch";
 
 interface RiskState {
   isPaused: boolean;
@@ -22,6 +22,21 @@ interface RiskState {
   lastTradeAt: string | null;
   cooldownUntil: string | null;
   dailyLossPercent: number;
+}
+
+type RegisteredUserStatus = "pending" | "active" | "disabled" | "all";
+
+interface RegisteredUser {
+  id: number;
+  email: string;
+  username: string;
+  role: "admin" | "viewer";
+  status: Exclude<RegisteredUserStatus, "all">;
+  createdAt: string;
+  updatedAt: string;
+  approvedAt: string | null;
+  approvedBy: string | null;
+  lastLoginAt: string | null;
 }
 
 async function fetchSettings() {
@@ -57,6 +72,25 @@ async function resumeTrading() {
 
 async function emergencyStop() {
   return await apiFetch("api/admin/emergency-stop", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+async function fetchAdminUsers(status: RegisteredUserStatus) {
+  const query = new URLSearchParams({ status, limit: "50" });
+  return await apiFetch<{ users: RegisteredUser[] }>(`api/admin/users?${query.toString()}`);
+}
+
+async function approveAdminUser(id: number) {
+  return await apiFetch<{ user: RegisteredUser }>(`api/admin/users/${id}/approve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+async function disableAdminUser(id: number) {
+  return await apiFetch<{ user: RegisteredUser }>(`api/admin/users/${id}/disable`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
   });
@@ -274,9 +308,182 @@ function SaveSettingsButton({
   );
 }
 
+function formatDate(value: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString();
+}
+
+function userStatusClass(status: RegisteredUser["status"]) {
+  if (status === "active") return "border-green-500/30 bg-green-500/10 text-green-400";
+  if (status === "disabled") return "border-red-500/30 bg-red-500/10 text-red-400";
+  return "border-yellow-500/30 bg-yellow-500/10 text-yellow-400";
+}
+
+function userErrorMessage(error: unknown) {
+  if (error instanceof ApiError) {
+    if (error.status === 401 || error.status === 403) return "Admin permission is required to manage users.";
+    if (error.status === 404) return "User not found.";
+    if (error.status === 503) return "User management is temporarily unavailable.";
+  }
+
+  return "User management request failed. Please try again.";
+}
+
+function UserManagementCard({
+  users,
+  loading,
+  error,
+  selectedStatus,
+  onStatusChange,
+  onRefresh,
+  onApprove,
+  onDisable,
+  approvingId,
+  disablingId,
+  refreshing,
+}: {
+  users: RegisteredUser[];
+  loading: boolean;
+  error: unknown;
+  selectedStatus: RegisteredUserStatus;
+  onStatusChange: (status: RegisteredUserStatus) => void;
+  onRefresh: () => void;
+  onApprove: (id: number) => void;
+  onDisable: (id: number) => void;
+  approvingId: number | null;
+  disablingId: number | null;
+  refreshing: boolean;
+}) {
+  const statuses: RegisteredUserStatus[] = ["pending", "active", "disabled", "all"];
+
+  return (
+    <Card className="bg-card border border-border">
+      <CardHeader className="flex flex-col gap-3 pb-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-1">
+          <CardTitle className="text-sm font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+            <Users className="h-4 w-4" /> Registered Users
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">Manage registered users and approval status.</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="grid grid-cols-2 gap-1 sm:flex">
+            {statuses.map((status) => (
+              <Button
+                key={status}
+                type="button"
+                size="sm"
+                variant={selectedStatus === status ? "default" : "outline"}
+                onClick={() => onStatusChange(status)}
+                className="h-8 text-xs capitalize"
+              >
+                {status}
+              </Button>
+            ))}
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={onRefresh}
+            disabled={refreshing}
+            className="h-8"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {error ? (
+          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {userErrorMessage(error)}
+          </div>
+        ) : loading ? (
+          <div className="text-muted-foreground text-sm animate-pulse">Loading users...</div>
+        ) : users.length === 0 ? (
+          <div className="rounded-md border border-border bg-muted/20 py-10 text-center text-sm text-muted-foreground">
+            No registered users found for this filter.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {users.map((user) => {
+              const approvePending = approvingId === user.id;
+              const disablePending = disablingId === user.id;
+              return (
+                <div key={user.id} className="rounded-md border border-border bg-muted/20 p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="break-all font-mono text-base font-semibold text-foreground">{user.username}</span>
+                        <Badge variant="outline" className={`font-mono text-[10px] uppercase ${userStatusClass(user.status)}`}>
+                          {user.status}
+                        </Badge>
+                        <Badge variant="outline" className="font-mono text-[10px] uppercase">
+                          {user.role}
+                        </Badge>
+                      </div>
+                      <div className="break-all text-sm text-muted-foreground">{user.email}</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(user.status === "pending" || user.status === "disabled") && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => onApprove(user.id)}
+                          disabled={approvePending || disablePending}
+                          className="h-8"
+                        >
+                          <UserCheck className={`h-3.5 w-3.5 mr-1 ${approvePending ? "animate-pulse" : ""}`} />
+                          {approvePending ? "Approving..." : "Approve"}
+                        </Button>
+                      )}
+                      {(user.status === "active" || user.status === "pending") && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onDisable(user.id)}
+                          disabled={approvePending || disablePending}
+                          className="h-8 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                        >
+                          <UserX className={`h-3.5 w-3.5 mr-1 ${disablePending ? "animate-pulse" : ""}`} />
+                          {disablePending ? "Disabling..." : "Disable"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                    <UserMeta label="Created" value={formatDate(user.createdAt)} />
+                    <UserMeta label="Approved" value={formatDate(user.approvedAt)} />
+                    <UserMeta label="Approved By" value={user.approvedBy ?? "—"} />
+                    <UserMeta label="Last Login" value={formatDate(user.lastLoginAt)} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function UserMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-border bg-card/60 p-2">
+      <div className="text-[10px] uppercase text-muted-foreground">{label}</div>
+      <div className="mt-1 break-words font-mono text-foreground">{value}</div>
+    </div>
+  );
+}
+
 export default function Admin() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [userStatusFilter, setUserStatusFilter] = useState<RegisteredUserStatus>("pending");
 
   const { data: settingsData, isLoading: settingsLoading } = useQuery({
     queryKey: ["admin-settings"],
@@ -287,6 +494,17 @@ export default function Admin() {
     queryKey: ["admin-risk"],
     queryFn: fetchRiskState,
     refetchInterval: 10000,
+  });
+
+  const {
+    data: usersData,
+    isLoading: usersLoading,
+    error: usersError,
+    isFetching: usersFetching,
+    refetch: refetchUsers,
+  } = useQuery({
+    queryKey: ["admin-users", userStatusFilter],
+    queryFn: () => fetchAdminUsers(userStatusFilter),
   });
 
   const [localSettings, setLocalSettings] = useState<Record<string, string>>({});
@@ -332,6 +550,32 @@ export default function Admin() {
     },
   });
 
+  const approveUserMutation = useMutation({
+    mutationFn: approveAdminUser,
+    onSuccess: () => {
+      toast({ title: "User approved", description: "The user can sign in after approval." });
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+    onError: (error) => toast({
+      title: "Approval failed",
+      description: userErrorMessage(error),
+      variant: "destructive",
+    }),
+  });
+
+  const disableUserMutation = useMutation({
+    mutationFn: disableAdminUser,
+    onSuccess: () => {
+      toast({ title: "User disabled", description: "The user can no longer sign in with this account." });
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+    onError: (error) => toast({
+      title: "Disable failed",
+      description: userErrorMessage(error),
+      variant: "destructive",
+    }),
+  });
+
   const set = (key: string, value: string) => setLocalSettings(s => ({ ...s, [key]: value }));
   const settingsEntries = canonicalEntries(localSettings);
   const primaryEntries = PRIMARY_SETTING_KEYS
@@ -339,6 +583,12 @@ export default function Admin() {
     .map((key) => [key, localSettings[key]] as [string, string]);
   const runtimeSections = buildSettingsSections(settingsEntries);
   const saveCurrentSettings = () => saveMutation.mutate(localSettings);
+  const approvingId = approveUserMutation.isPending ? approveUserMutation.variables ?? null : null;
+  const disablingId = disableUserMutation.isPending ? disableUserMutation.variables ?? null : null;
+  const handleDisableUser = (id: number) => {
+    if (!window.confirm("Disable this registered user? They will not be able to sign in.")) return;
+    disableUserMutation.mutate(id);
+  };
 
   return (
     <div className="space-y-6">
@@ -425,6 +675,20 @@ export default function Admin() {
           ) : null}
         </CardContent>
       </Card>
+
+      <UserManagementCard
+        users={usersData?.users ?? []}
+        loading={usersLoading}
+        error={usersError}
+        selectedStatus={userStatusFilter}
+        onStatusChange={setUserStatusFilter}
+        onRefresh={() => refetchUsers()}
+        onApprove={(id) => approveUserMutation.mutate(id)}
+        onDisable={handleDisableUser}
+        approvingId={approvingId}
+        disablingId={disablingId}
+        refreshing={usersFetching}
+      />
 
       {/* Runtime Settings */}
       <Card className="bg-card border border-border">
