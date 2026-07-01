@@ -70,6 +70,8 @@ services:
       RUN_BACKGROUND_SERVICES: "true"
       SCHEDULER_IN_API_PROCESS: "false"
       TRUST_PROXY: "true"
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-false}
+      REGISTRATION_AUTO_APPROVE: ${REGISTRATION_AUTO_APPROVE:-false}
     depends_on:
       migrate:
         condition: service_completed_successfully
