@@ -9,6 +9,7 @@ import { ThemeProvider } from "next-themes";
 
 import Dashboard from "@/pages/dashboard";
 import Login from "@/pages/login";
+import Register from "@/pages/register";
 import Scanner from "@/pages/scanner";
 import Gainers from "@/pages/gainers";
 import Losers from "@/pages/losers";
@@ -47,6 +48,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      <Route path="/register" component={Register} />
       <Route>
         <ProtectedRoute>
           <Layout>

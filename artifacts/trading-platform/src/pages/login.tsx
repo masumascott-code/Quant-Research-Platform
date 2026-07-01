@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
 import { Activity, Lock } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 
 export default function Login() {
   const { login, status } = useAuth();
@@ -83,6 +83,12 @@ export default function Login() {
               {submitting ? "Signing in..." : "Sign In"}
             </Button>
           </form>
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            Need access?{" "}
+            <Link href="/register" className="text-primary hover:underline">
+              Request an account
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </main>
