@@ -1,8 +1,9 @@
-import { and, eq, or } from "drizzle-orm";
+import { and, desc, eq, or } from "drizzle-orm";
 import { appUsersTable, db, type AppUser } from "@workspace/db";
 import { hashPassword, verifyPassword } from "./password";
 import { normalizeEmail, normalizeUsername } from "./normalization";
 import { securityConfig } from "../../config/security";
+import type { AppUserStatusFilter } from "./admin-users";
 
 export { normalizeEmail, normalizeUsername } from "./normalization";
 
@@ -26,6 +27,64 @@ export async function findUserByNormalizedEmailOrUsername(identifier: string): P
     }
     throw err;
   }
+
+  return user ?? null;
+}
+
+export async function listAppUsers(params: {
+  status: AppUserStatusFilter;
+  limit: number;
+}): Promise<AppUser[]> {
+  if (params.status === "all") {
+    return await db
+      .select()
+      .from(appUsersTable)
+      .orderBy(desc(appUsersTable.createdAt))
+      .limit(params.limit);
+  }
+
+  return await db
+    .select()
+    .from(appUsersTable)
+    .where(eq(appUsersTable.status, params.status))
+    .orderBy(desc(appUsersTable.createdAt))
+    .limit(params.limit);
+}
+
+export async function findAppUserById(id: number): Promise<AppUser | null> {
+  const [user] = await db
+    .select()
+    .from(appUsersTable)
+    .where(eq(appUsersTable.id, id))
+    .limit(1);
+
+  return user ?? null;
+}
+
+export async function approveAppUser(id: number, approvedBy: string): Promise<AppUser | null> {
+  const [user] = await db
+    .update(appUsersTable)
+    .set({
+      status: "active",
+      approvedAt: new Date(),
+      approvedBy,
+      updatedAt: new Date(),
+    })
+    .where(eq(appUsersTable.id, id))
+    .returning();
+
+  return user ?? null;
+}
+
+export async function disableAppUser(id: number): Promise<AppUser | null> {
+  const [user] = await db
+    .update(appUsersTable)
+    .set({
+      status: "disabled",
+      updatedAt: new Date(),
+    })
+    .where(eq(appUsersTable.id, id))
+    .returning();
 
   return user ?? null;
 }

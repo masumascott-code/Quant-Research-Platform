@@ -114,6 +114,118 @@ paths:
               schema:
                 $ref: "#/components/schemas/CurrentUserResponse"
 
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [auth]
+      summary: List registered application users for admin approval
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, active, disabled, all]
+          description: Defaults to pending.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Registered users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserListResponse"
+        "400":
+          description: Invalid filter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/users/{id}/approve:
+    post:
+      operationId: approveAdminUser
+      tags: [auth]
+      summary: Approve a registered user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Approved user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserResponse"
+        "400":
+          description: Invalid user id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/users/{id}/disable:
+    post:
+      operationId: disableAdminUser
+      tags: [auth]
+      summary: Disable a registered user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Disabled user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserResponse"
+        "400":
+          description: Invalid user id or self-disable attempt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /scanner/status:
     get:
       operationId: getScannerStatus
@@ -649,6 +761,56 @@ components:
       properties:
         user:
           $ref: "#/components/schemas/AuthUser"
+
+    AppUserStatus:
+      type: string
+      enum: [pending, active, disabled]
+
+    AppUserAdminView:
+      type: object
+      required: [id, email, username, role, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+        role:
+          $ref: "#/components/schemas/AuthRole"
+        status:
+          $ref: "#/components/schemas/AppUserStatus"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        approvedAt:
+          type: ["string", "null"]
+          format: date-time
+        approvedBy:
+          type: ["string", "null"]
+        lastLoginAt:
+          type: ["string", "null"]
+          format: date-time
+
+    AdminUserListResponse:
+      type: object
+      required: [users]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/AppUserAdminView"
+
+    AdminUserResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/AppUserAdminView"
 
     ActionResult:
       type: object

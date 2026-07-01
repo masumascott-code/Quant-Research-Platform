@@ -1,10 +1,22 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import { systemSettingsTable, paperTradesTable, signalsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { configService, ConfigurationValidator } from "../core/config";
 import { riskManager } from "../services/risk-manager";
 import { ScannerService } from "../services/scanner";
+import {
+  approveAppUser,
+  disableAppUser,
+  isAuthUserSchemaUnavailable,
+  listAppUsers,
+} from "../core/auth/users";
+import {
+  canDisableUser,
+  parseAppUserLimit,
+  parseAppUserStatusFilter,
+  sanitizeAppUser,
+} from "../core/auth/admin-users";
 
 const router = Router();
 
@@ -64,6 +76,97 @@ function buildCandidateSettings(rows: SettingsRow[], valuesToPersist: Map<string
 
   return candidate;
 }
+
+function requireAdmin(req: Request, res: Response): boolean {
+  if (req.auth?.role === "admin") return true;
+  res.status(403).json({ error: "Admin role required" });
+  return false;
+}
+
+function parseUserId(raw: string | undefined): number | null {
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function handleAppUserError(err: unknown, res: Response): boolean {
+  if (isAuthUserSchemaUnavailable(err)) {
+    res.status(503).json({ error: "User management is temporarily unavailable" });
+    return true;
+  }
+
+  return false;
+}
+
+router.get("/users", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+
+  const status = parseAppUserStatusFilter(req.query.status);
+  if (!status) {
+    res.status(400).json({ error: "Invalid user status filter" });
+    return;
+  }
+
+  const limit = parseAppUserLimit(req.query.limit);
+
+  try {
+    const users = await listAppUsers({ status, limit });
+    res.json({ users: users.map(sanitizeAppUser) });
+  } catch (err) {
+    if (handleAppUserError(err, res)) return;
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+router.post("/users/:id/approve", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+
+  const id = parseUserId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+
+  try {
+    const user = await approveAppUser(id, req.auth?.username ?? "admin");
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    res.json({ user: sanitizeAppUser(user) });
+  } catch (err) {
+    if (handleAppUserError(err, res)) return;
+    res.status(500).json({ error: "Failed to approve user" });
+  }
+});
+
+router.post("/users/:id/disable", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+
+  const id = parseUserId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+
+  if (!canDisableUser(id, req.auth)) {
+    res.status(400).json({ error: "Cannot disable the current authenticated user" });
+    return;
+  }
+
+  try {
+    const user = await disableAppUser(id);
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    res.json({ user: sanitizeAppUser(user) });
+  } catch (err) {
+    if (handleAppUserError(err, res)) return;
+    res.status(500).json({ error: "Failed to disable user" });
+  }
+});
 
 router.get("/settings", async (req, res) => {
   try {

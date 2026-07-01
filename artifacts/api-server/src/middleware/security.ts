@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { securityConfig, type Role } from "../config/security";
 import { createJwt, verifyJwt, type JwtPayload } from "../lib/jwt";
 import { logger } from "../lib/logger";
+import { findAppUserById, isAuthUserSchemaUnavailable } from "../core/auth/users";
 
 export interface AuthContext {
   username: string;
@@ -99,7 +100,7 @@ export function rateLimit(maxRequests: number, windowMs = securityConfig.rateLim
   };
 }
 
-export function authenticate(req: Request, res: Response, next: NextFunction) {
+export async function authenticate(req: Request, res: Response, next: NextFunction) {
   if (!securityConfig.authEnabled) {
     req.auth = { username: "auth-disabled", role: "admin" };
     next();
@@ -134,7 +135,41 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
     return;
   }
 
-  req.auth = authFromPayload(payload);
+  let auth = authFromPayload(payload);
+  if (payload.userId != null) {
+    try {
+      const user = await findAppUserById(payload.userId);
+      if (!user || user.status !== "active") {
+        logger.warn({
+          audit: true,
+          event: "auth_db_user_inactive",
+          userId: payload.userId,
+          username: payload.sub,
+          ip: getClientIp(req),
+          method: req.method,
+          path: req.path,
+        });
+        res.status(401).json({ error: "Invalid or expired token" });
+        return;
+      }
+
+      auth = { username: user.username, role: user.role, userId: user.id };
+    } catch (err) {
+      logger.warn({
+        audit: true,
+        event: "auth_db_user_status_check_failed",
+        userId: payload.userId,
+        schemaUnavailable: isAuthUserSchemaUnavailable(err),
+        ip: getClientIp(req),
+        method: req.method,
+        path: req.path,
+      });
+      res.status(401).json({ error: "Invalid or expired token" });
+      return;
+    }
+  }
+
+  req.auth = auth;
   next();
 }
 
