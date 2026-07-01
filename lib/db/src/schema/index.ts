@@ -7,6 +7,7 @@ export * from "./setup_statistics";
 export * from "./daily_performance";
 export * from "./watchlist";
 export * from "./system_settings";
+export * from "./users";
 export * from "./accounts";
 export * from "./portfolio";
 export * from "./portfolio_positions";

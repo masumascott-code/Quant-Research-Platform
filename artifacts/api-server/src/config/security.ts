@@ -8,10 +8,13 @@ export interface AuthUserConfig {
   role: Role;
 }
 
-function boolEnv(name: string, fallback: boolean): boolean {
-  const raw = process.env[name];
+function boolValue(raw: string | undefined, fallback: boolean): boolean {
   if (raw == null || raw.trim() === "") return fallback;
   return ["1", "true", "yes", "on"].includes(raw.trim().toLowerCase());
+}
+
+function boolEnv(name: string, fallback: boolean): boolean {
+  return boolValue(process.env[name], fallback);
 }
 
 function numberEnv(name: string, fallback: number): number {
@@ -30,6 +33,7 @@ function csvEnv(name: string): string[] {
 
 const isProduction = process.env.NODE_ENV === "production";
 const authEnabled = boolEnv("AUTH_ENABLED", true);
+const { registrationEnabled, registrationAutoApprove } = registrationFlagsFromEnv(process.env);
 
 const jwtSecret = process.env.JWT_SECRET ??
   (isProduction ? "" : "dev-only-change-me-32-characters-minimum");
@@ -64,6 +68,8 @@ export const securityConfig = {
   rateLimitMax: numberEnv("RATE_LIMIT_MAX", 120),
   authRateLimitMax: numberEnv("AUTH_RATE_LIMIT_MAX", 10),
   trustProxy: boolEnv("TRUST_PROXY", false),
+  registrationEnabled,
+  registrationAutoApprove,
   users: [
     {
       username: process.env.ADMIN_USERNAME ?? "admin",
@@ -77,3 +83,13 @@ export const securityConfig = {
     },
   ] satisfies AuthUserConfig[],
 };
+
+export function registrationFlagsFromEnv(env: NodeJS.ProcessEnv): {
+  registrationEnabled: boolean;
+  registrationAutoApprove: boolean;
+} {
+  return {
+    registrationEnabled: boolValue(env.REGISTRATION_ENABLED, false),
+    registrationAutoApprove: boolValue(env.REGISTRATION_AUTO_APPROVE, false),
+  };
+}
