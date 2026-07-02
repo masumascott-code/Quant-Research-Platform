@@ -188,7 +188,7 @@ router.get("/diagnostics", async (req, res) => {
     const todayCountsBySymbol = countBySymbol(todayDecisions);
     const recentDecisions = recentDecisionCandidates.slice(0, limit);
     const partitionLimit = Math.max(6, Math.ceil(limit / 3));
-    const formatPartition = (label: string) => recentDecisionCandidates
+    const formatPartition = (label: string) => todayDecisions
       .filter((decision) => displayDecision(decision) === label)
       .slice(0, partitionLimit)
       .map((decision) => formatDecision(decision, todayCountsBySymbol.get(decision.symbol) ?? 0));
