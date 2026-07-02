@@ -331,9 +331,9 @@ function LivePositionCard({ trade, livePrices }: { trade: any; livePrices: Recor
 
 function ScannerDiagnosticsPanel() {
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["scanner-diagnostics", { limit: 12 }],
-    queryFn: () => apiFetch<ScannerDiagnostics>("/api/scanner/diagnostics?limit=12"),
-    refetchInterval: 15000,
+    queryKey: ["scanner-diagnostics", { limit: 24 }],
+    queryFn: () => apiFetch<ScannerDiagnostics>("/api/scanner/diagnostics?limit=24"),
+    refetchInterval: 5000,
   });
   const [displayNextScan, setDisplayNextScan] = useState<number | null>(null);
 

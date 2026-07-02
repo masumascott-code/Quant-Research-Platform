@@ -186,7 +186,7 @@ router.get("/diagnostics", async (req, res) => {
     const averageFinalScore = average(todayDecisions.map((decision) => Number(decision.finalScore)));
     const averageConfidence = average(todayDecisions.map((decision) => Number(decision.confidence)));
     const todayCountsBySymbol = countBySymbol(todayDecisions);
-    const recentUniqueDecisions = uniqueLatestBySymbol(recentDecisionCandidates).slice(0, limit);
+    const recentDecisions = recentDecisionCandidates.slice(0, limit);
     const topRejectedReasons = countValues(
       todayDecisions
         .filter((decision) => displayDecision(decision) === "REJECTED")
@@ -212,7 +212,7 @@ router.get("/diagnostics", async (req, res) => {
         averageConfidence,
         topRejectedReasons,
       },
-      recentDecisions: recentUniqueDecisions.map((decision) => (
+      recentDecisions: recentDecisions.map((decision) => (
         formatDecision(decision, todayCountsBySymbol.get(decision.symbol) ?? 0)
       )),
       recentSnapshots: uniqueLatestBySymbol(recentSnapshotCandidates)
