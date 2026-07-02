@@ -2,10 +2,13 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { signalsTable } from "@workspace/db";
 import { eq, desc, and, inArray } from "drizzle-orm";
+import { reconcileSignalStatuses } from "../services/signal-status";
 
 const router = Router();
 
 router.get("/", async (req, res) => {
+  await reconcileSignalStatuses();
+
   const limit = Math.min(Number(req.query.limit) || 50, 200);
   const { status, direction } = req.query;
 
@@ -28,6 +31,8 @@ router.get("/", async (req, res) => {
 });
 
 router.get("/active", async (req, res) => {
+  await reconcileSignalStatuses();
+
   const signals = await db
     .select()
     .from(signalsTable)
@@ -38,6 +43,8 @@ router.get("/active", async (req, res) => {
 });
 
 router.get("/:id", async (req, res) => {
+  await reconcileSignalStatuses();
+
   const id = Number(req.params.id);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid ID" });

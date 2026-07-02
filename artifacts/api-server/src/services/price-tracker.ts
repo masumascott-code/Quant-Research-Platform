@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
-import { paperTradesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { paperTradesTable, signalsTable } from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { configService } from "../core/config";
 
@@ -57,12 +57,18 @@ export class PriceTracker {
 
   private async refreshSymbols() {
     try {
-      const openTrades = await db
-        .select({ symbol: paperTradesTable.symbol })
-        .from(paperTradesTable)
-        .where(eq(paperTradesTable.status, "open"));
+      const [openTrades, openSignals] = await Promise.all([
+        db
+          .select({ symbol: paperTradesTable.symbol })
+          .from(paperTradesTable)
+          .where(eq(paperTradesTable.status, "open")),
+        db
+          .select({ symbol: signalsTable.symbol })
+          .from(signalsTable)
+          .where(inArray(signalsTable.status, ["pending", "active"])),
+      ]);
 
-      const newSymbols = new Set(openTrades.map(t => t.symbol.toUpperCase()));
+      const newSymbols = new Set([...openTrades, ...openSignals].map(t => t.symbol.toUpperCase()));
       const changed =
         newSymbols.size !== this.trackedSymbols.size ||
         [...newSymbols].some(s => !this.trackedSymbols.has(s));

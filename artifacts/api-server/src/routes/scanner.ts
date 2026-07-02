@@ -12,6 +12,7 @@ import { eq, desc, sql, and, gte, count, sum, inArray } from "drizzle-orm";
 import { configService } from "../core/config";
 import { portfolioService } from "../core/portfolio";
 import { ScannerService } from "../services/scanner";
+import { reconcileSignalStatuses } from "../services/signal-status";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -235,6 +236,8 @@ router.get("/diagnostics", async (req, res) => {
 });
 
 router.get("/dashboard", async (req, res) => {
+  await reconcileSignalStatuses();
+
   const scanner = ScannerService.getInstance();
   const status = scanner.getStatus();
 
