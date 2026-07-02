@@ -30,6 +30,7 @@ export class ScannerService {
   private timer: NodeJS.Timeout | null = null;
   private lastScanAt: string | null = null;
   private scanStart: number | null = null;
+  private analysisCursor: Record<"LONG" | "SHORT", number> = { LONG: 0, SHORT: 0 };
 
   static getInstance(): ScannerService {
     if (!ScannerService.instance) {
@@ -104,13 +105,16 @@ export class ScannerService {
       await this.expireWatchlist();
 
       const riskCheck = await riskManager.canTrade();
+      const blockedSymbols = await this.getBlockedAnalysisSymbols();
+      const longCandidates = this.pickAnalysisCandidates(gainers, "LONG", blockedSymbols, config);
+      const shortCandidates = this.pickAnalysisCandidates(losers, "SHORT", blockedSymbols, config);
 
-      for (const ticker of gainers.slice(0, config.analysisListSize)) {
+      for (const ticker of longCandidates) {
         await this.analyzeSymbol(ticker, "LONG", riskCheck.allowed, runtimeConfig);
         await sleep(config.symbolCooldownMs);
       }
 
-      for (const ticker of losers.slice(0, config.analysisListSize)) {
+      for (const ticker of shortCandidates) {
         await this.analyzeSymbol(ticker, "SHORT", riskCheck.allowed, runtimeConfig);
         await sleep(config.symbolCooldownMs);
       }
@@ -118,10 +122,56 @@ export class ScannerService {
       // Re-check watchlist items
       await this.checkWatchlist(tickers, runtimeConfig);
 
-      logger.info({ gainers: gainers.length, losers: losers.length }, "Scan v2 complete");
+      logger.info({
+        gainers: gainers.length,
+        losers: losers.length,
+        longAnalyzed: longCandidates.length,
+        shortAnalyzed: shortCandidates.length,
+        blockedSymbols: blockedSymbols.size,
+      }, "Scan v2 complete");
     } catch (err) {
       logger.error({ err }, "Scan failed");
     }
+  }
+
+  private pickAnalysisCandidates(
+    tickers: TickerData[],
+    direction: "LONG" | "SHORT",
+    blockedSymbols: Set<string>,
+    config: ScannerRuntimeConfig
+  ): TickerData[] {
+    const pool = tickers.slice(0, Math.max(config.topListSize, config.analysisListSize));
+    if (pool.length === 0) return [];
+
+    const start = this.analysisCursor[direction] % pool.length;
+    this.analysisCursor[direction] = (start + config.analysisListSize) % pool.length;
+
+    const rotated = [...pool.slice(start), ...pool.slice(0, start)];
+    const freshCandidates = rotated.filter((ticker) => !blockedSymbols.has(ticker.symbol));
+    return freshCandidates.slice(0, config.analysisListSize);
+  }
+
+  private async getBlockedAnalysisSymbols(): Promise<Set<string>> {
+    const [openTrades, activeSignals, activeWatchlist] = await Promise.all([
+      db
+        .select({ symbol: paperTradesTable.symbol })
+        .from(paperTradesTable)
+        .where(eq(paperTradesTable.status, "open")),
+      db
+        .select({ symbol: signalsTable.symbol })
+        .from(signalsTable)
+        .where(eq(signalsTable.status, "active")),
+      db
+        .select({ symbol: watchlistTable.symbol })
+        .from(watchlistTable)
+        .where(eq(watchlistTable.isActive, true)),
+    ]);
+
+    return new Set([
+      ...openTrades.map((trade) => trade.symbol),
+      ...activeSignals.map((signal) => signal.symbol),
+      ...activeWatchlist.map((item) => item.symbol),
+    ]);
   }
 
   private async fetchAllTickers(config: ScannerRuntimeConfig): Promise<TickerData[]> {
@@ -315,20 +365,25 @@ export class ScannerService {
   private async addToWatchlist(symbol: string, analysis: any) {
     const existing = await db.select().from(watchlistTable)
       .where(and(eq(watchlistTable.symbol, symbol), eq(watchlistTable.isActive, true)));
-    if (existing.length > 0) return;
 
     const expiresAt = new Date(Date.now() + configService.getSync().scanner.watchlistTtlMs);
-    await db.insert(watchlistTable).values({
+    const values = {
       symbol, direction: analysis.direction, score: String(analysis.score),
       confidence: analysis.confidence, setupType: analysis.setupType,
       entryPrice: String(analysis.entryPrice), stopLoss: String(analysis.stopLoss),
       tp1: String(analysis.tp1), tp2: String(analysis.tp2), tp3: String(analysis.tp3),
       rrRatio: String(analysis.rrRatio), reason: analysis.reason,
       isActive: true, promoted: false, expiresAt,
-    });
+    };
+
+    if (existing.length > 0) {
+      await db.update(watchlistTable).set(values).where(eq(watchlistTable.id, existing[0].id));
+    } else {
+      await db.insert(watchlistTable).values(values);
+    }
 
     await Telegram.watchlistAdded(symbol, analysis.direction, analysis.score, analysis.setupType);
-    logger.info({ symbol, score: analysis.score, setupType: analysis.setupType }, "Added to watchlist");
+    logger.info({ symbol, score: analysis.score, setupType: analysis.setupType }, existing.length > 0 ? "Updated watchlist" : "Added to watchlist");
   }
 
   private async checkWatchlist(tickers: TickerData[], runtimeConfig: RuntimeConfig) {

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Eye, TrendingUp, TrendingDown, Clock, CheckCircle } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { PriceChart } from "@/components/market/price-chart";
@@ -27,12 +27,13 @@ interface WatchlistItem {
   expiresAt: string;
 }
 
-async function fetchWatchlist() {
-  return await apiFetch<{ active: WatchlistItem[]; history: WatchlistItem[] }>("api/watchlist");
+interface WatchlistThresholds {
+  minScoreWatchlist: number;
+  minScoreTrade: number;
 }
 
-async function fetchSettings() {
-  return await apiFetch<{ settings: Record<string, string> }>("api/admin/settings");
+async function fetchWatchlist() {
+  return await apiFetch<{ active: WatchlistItem[]; history: WatchlistItem[]; thresholds: WatchlistThresholds }>("api/watchlist");
 }
 
 function confidenceBadge(c: string) {
@@ -127,18 +128,21 @@ function WatchlistCard({ item, minTradeScore }: { item: WatchlistItem; minTradeS
   );
 }
 
+function watchlistRangeLabel(thresholds?: WatchlistThresholds) {
+  const minWatchlistScore = thresholds?.minScoreWatchlist ?? 80;
+  const minTradeScore = thresholds?.minScoreTrade ?? 90;
+  if (minWatchlistScore >= minTradeScore) return `${minWatchlistScore}+`;
+  return `${minWatchlistScore}-${Math.max(minWatchlistScore, minTradeScore - 1)}`;
+}
+
 export default function Watchlist() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["watchlist"],
     queryFn: fetchWatchlist,
-    refetchInterval: 30000,
+    refetchInterval: 10000,
   });
-  const { data: settingsData } = useQuery({
-    queryKey: ["admin-settings", "watchlist-threshold"],
-    queryFn: fetchSettings,
-    staleTime: 30000,
-  });
-  const minTradeScore = Number(settingsData?.settings["scanner.minScoreTrade"] ?? settingsData?.settings.min_score_trade ?? 80);
+  const minTradeScore = data?.thresholds.minScoreTrade ?? 80;
+  const scoreRange = watchlistRangeLabel(data?.thresholds);
 
   return (
     <div className="space-y-6">
@@ -148,7 +152,7 @@ export default function Watchlist() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-foreground">Smart Watchlist</h1>
-          <p className="text-sm text-muted-foreground">Near-miss signals (score 80–89) being monitored for promotion</p>
+          <p className="text-sm text-muted-foreground">Near-miss signals (score {scoreRange}) being monitored for promotion</p>
         </div>
         <div className="ml-auto bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-3 py-1.5">
           <span className="text-xs font-mono text-yellow-400">
@@ -183,7 +187,7 @@ export default function Watchlist() {
               <CardContent className="p-8 text-center">
                 <Eye className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
                 <p className="text-muted-foreground text-sm">No symbols currently being watched</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">Symbols scoring 80–89 will appear here and be monitored for improvement</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Symbols scoring {scoreRange} will appear here and be monitored for improvement</p>
               </CardContent>
             </Card>
           )}

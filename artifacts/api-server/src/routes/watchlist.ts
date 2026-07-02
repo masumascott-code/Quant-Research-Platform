@@ -2,11 +2,14 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { scannerDecisionsTable, watchlistTable } from "@workspace/db";
 import { and, desc, eq } from "drizzle-orm";
+import { configService } from "../core/config";
 
 const router = Router();
 
 router.get("/", async (req, res) => {
   try {
+    res.setHeader("Cache-Control", "no-store");
+    const runtimeConfig = await configService.get();
     const active = await db.select().from(watchlistTable)
       .where(eq(watchlistTable.isActive, true))
       .orderBy(desc(watchlistTable.createdAt));
@@ -19,6 +22,10 @@ router.get("/", async (req, res) => {
     res.json({
       active: await enrichWithLatestDecision(active),
       history: await enrichWithLatestDecision(history),
+      thresholds: {
+        minScoreWatchlist: runtimeConfig.scanner.minScoreWatchlist,
+        minScoreTrade: runtimeConfig.scanner.minScoreTrade,
+      },
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch watchlist" });
