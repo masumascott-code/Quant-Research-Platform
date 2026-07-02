@@ -21,7 +21,7 @@ type ScannerDiagnosticDecision = {
   id: number;
   symbol: string;
   direction: string;
-  decision: "ACCEPTED" | "REJECTED" | string;
+  decision: "ACCEPTED" | "REJECTED" | "SKIPPED" | string;
   strategy: string;
   finalScore: number;
   technicalScore: number;
@@ -61,6 +61,7 @@ type ScannerDiagnostics = {
     totalDecisions: number;
     accepted: number;
     rejected: number;
+    skipped: number;
     averageFinalScore: number;
     averageConfidence: number;
     topRejectedReasons: Array<{ reason: string; count: number }>;
@@ -376,10 +377,11 @@ function ScannerDiagnosticsPanel() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-px bg-border/60">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-px bg-border/60">
               <DiagnosticStat label="Decisions Today" value={data?.today.totalDecisions.toString() ?? "---"} loading={isLoading} />
               <DiagnosticStat label="Accepted" value={data?.today.accepted.toString() ?? "---"} valueClassName="text-success" loading={isLoading} />
               <DiagnosticStat label="Rejected" value={data?.today.rejected.toString() ?? "---"} valueClassName="text-destructive" loading={isLoading} />
+              <DiagnosticStat label="Skipped" value={data?.today.skipped?.toString() ?? "0"} valueClassName="text-yellow-400" loading={isLoading} />
               <DiagnosticStat label="Avg Score" value={formatScore(data?.today.averageFinalScore)} loading={isLoading} />
               <DiagnosticStat label="Next Scan" value={displayNextScan == null ? "---" : `${displayNextScan}s`} loading={isLoading} />
             </div>
@@ -468,7 +470,7 @@ function ScannerDiagnosticsPanel() {
                           <TableCell>
                             <Badge
                               variant={decision.decision === "ACCEPTED" ? "default" : "outline"}
-                              className={`font-mono ${decision.decision === "ACCEPTED" ? "bg-success text-success-foreground" : "text-muted-foreground"}`}
+                              className={`font-mono ${decisionBadgeClass(decision.decision)}`}
                             >
                               {decision.decision}
                             </Badge>
@@ -582,6 +584,12 @@ function formatVolume(value?: number): string {
 
 function formatTime(value?: string | null): string {
   return value ? new Date(value).toLocaleTimeString() : "---";
+}
+
+function decisionBadgeClass(decision: string): string {
+  if (decision === "ACCEPTED") return "bg-success text-success-foreground";
+  if (decision === "SKIPPED") return "border-yellow-500/40 bg-yellow-500/10 text-yellow-400";
+  return "text-muted-foreground";
 }
 
 function StatusRow({ label, status, ok }: { label: string; status: string; ok: boolean }) {

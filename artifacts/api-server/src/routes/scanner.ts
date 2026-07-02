@@ -132,6 +132,8 @@ router.get("/coins", async (req, res) => {
 });
 
 router.get("/diagnostics", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+
   const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), 50);
   const scanner = ScannerService.getInstance();
   const status = scanner.getStatus();
@@ -178,15 +180,16 @@ router.get("/diagnostics", async (req, res) => {
         .from(marketSnapshotsTable),
     ]);
 
-    const acceptedToday = todayDecisions.filter((decision) => decision.decision === "ACCEPTED").length;
-    const rejectedToday = todayDecisions.filter((decision) => decision.decision === "REJECTED").length;
+    const acceptedToday = todayDecisions.filter((decision) => displayDecision(decision) === "ACCEPTED").length;
+    const rejectedToday = todayDecisions.filter((decision) => displayDecision(decision) === "REJECTED").length;
+    const skippedToday = todayDecisions.filter((decision) => displayDecision(decision) === "SKIPPED").length;
     const averageFinalScore = average(todayDecisions.map((decision) => Number(decision.finalScore)));
     const averageConfidence = average(todayDecisions.map((decision) => Number(decision.confidence)));
     const todayCountsBySymbol = countBySymbol(todayDecisions);
     const recentUniqueDecisions = uniqueLatestBySymbol(recentDecisionCandidates).slice(0, limit);
     const topRejectedReasons = countValues(
       todayDecisions
-        .filter((decision) => decision.decision === "REJECTED")
+        .filter((decision) => displayDecision(decision) === "REJECTED")
         .flatMap((decision) => asStringArray(decision.reasons))
     );
 
@@ -204,6 +207,7 @@ router.get("/diagnostics", async (req, res) => {
         totalDecisions: todayDecisions.length,
         accepted: acceptedToday,
         rejected: rejectedToday,
+        skipped: skippedToday,
         averageFinalScore,
         averageConfidence,
         topRejectedReasons,
@@ -304,11 +308,13 @@ function formatSnapshot(s: any) {
 }
 
 function formatDecision(decision: typeof scannerDecisionsTable.$inferSelect, scansToday = 0) {
+  const reasons = asStringArray(decision.reasons);
+
   return {
     id: decision.id,
     symbol: decision.symbol,
     direction: decision.direction,
-    decision: decision.decision,
+    decision: displayDecision(decision),
     strategy: decision.strategy,
     finalScore: Number(decision.finalScore),
     technicalScore: Number(decision.technicalScore),
@@ -316,11 +322,27 @@ function formatDecision(decision: typeof scannerDecisionsTable.$inferSelect, sca
     marketRegime: decision.marketRegime,
     opportunityRank: decision.opportunityRank == null ? null : Number(decision.opportunityRank),
     riskGrade: decision.riskGrade,
-    reasons: asStringArray(decision.reasons),
+    reasons,
     riskSummary: asStringArray(decision.riskSummary),
     scansToday,
     createdAt: decision.createdAt,
   };
+}
+
+function displayDecision(decision: typeof scannerDecisionsTable.$inferSelect): string {
+  const reasons = asStringArray(decision.reasons);
+  if (decision.decision === "REJECTED" && isSkippedDecisionReason(reasons)) {
+    return "SKIPPED";
+  }
+
+  return decision.decision;
+}
+
+function isSkippedDecisionReason(reasons: string[]): boolean {
+  return reasons.some((reason) =>
+    reason.includes("Duplicate open position exists") ||
+    reason.includes("Duplicate active signal exists")
+  );
 }
 
 function uniqueLatestBySymbol<T extends { symbol: string }>(rows: T[]): T[] {
