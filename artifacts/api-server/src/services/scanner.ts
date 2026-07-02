@@ -24,6 +24,12 @@ interface TickerData {
   quoteVolume: string;
 }
 
+interface TradingLimitCheck {
+  allowed: boolean;
+  reason: string;
+  details?: Record<string, unknown>;
+}
+
 export class ScannerService {
   private static instance: ScannerService;
   private running = false;
@@ -110,12 +116,12 @@ export class ScannerService {
       const shortCandidates = this.pickAnalysisCandidates(losers, "SHORT", blockedSymbols, config);
 
       for (const ticker of longCandidates) {
-        await this.analyzeSymbol(ticker, "LONG", riskCheck.allowed, runtimeConfig);
+        await this.analyzeSymbol(ticker, "LONG", riskCheck, runtimeConfig);
         await sleep(config.symbolCooldownMs);
       }
 
       for (const ticker of shortCandidates) {
-        await this.analyzeSymbol(ticker, "SHORT", riskCheck.allowed, runtimeConfig);
+        await this.analyzeSymbol(ticker, "SHORT", riskCheck, runtimeConfig);
         await sleep(config.symbolCooldownMs);
       }
 
@@ -245,7 +251,12 @@ export class ScannerService {
     return rvol != null && Number.isFinite(rvol) && rvol > 0 ? rvol : null;
   }
 
-  private async analyzeSymbol(ticker: TickerData, direction: "LONG" | "SHORT", canOpenTrade: boolean, runtimeConfig: RuntimeConfig) {
+  private async analyzeSymbol(
+    ticker: TickerData,
+    direction: "LONG" | "SHORT",
+    riskCheck: { allowed: boolean; reason: string },
+    runtimeConfig: RuntimeConfig
+  ) {
     const config = runtimeConfig.scanner;
     const symbol = ticker.symbol;
     const currentPrice = Number(ticker.lastPrice);
@@ -301,16 +312,35 @@ export class ScannerService {
 
       if (decision.finalScore >= config.minScoreTrade) {
         // A/A+ signal — try to open a trade
-        const canTrade = await this.checkTradingLimits();
-        if (!canTrade) {
+        const tradeLimitCheck = await this.checkTradingLimits();
+        if (!tradeLimitCheck.allowed) {
           // Save as signal but don't open trade
-          await this.saveSignal(symbol, decisionAnalysis, "active");
+          const newSignal = await this.saveSignal(symbol, decisionAnalysis, "active");
+          logger.warn({
+            event: "signal_saved_without_trade",
+            blockType: "trading_limit",
+            symbol,
+            direction: decisionAnalysis.direction,
+            finalScore: decision.finalScore,
+            reason: tradeLimitCheck.reason,
+            details: tradeLimitCheck.details,
+            signalId: newSignal.id,
+          }, "Active signal saved without paper trade");
           return;
         }
 
-        if (!canOpenTrade) {
+        if (!riskCheck.allowed) {
           logger.info({ symbol, reason: "risk manager paused" }, "Skipping trade — risk manager paused");
-          await this.saveSignal(symbol, decisionAnalysis, "active");
+          const newSignal = await this.saveSignal(symbol, decisionAnalysis, "active");
+          logger.warn({
+            event: "signal_saved_without_trade",
+            blockType: "risk_manager",
+            symbol,
+            direction: decisionAnalysis.direction,
+            finalScore: decision.finalScore,
+            reason: riskCheck.reason,
+            signalId: newSignal.id,
+          }, "Active signal saved without paper trade");
           return;
         }
 
@@ -359,7 +389,18 @@ export class ScannerService {
   }
 
   private async openPaperTrade(signal: any, analysis: any) {
-    return await tradeService.openPaperTrade(signal, analysis);
+    const trade = await tradeService.openPaperTrade(signal, analysis);
+    if (!trade) {
+      logger.warn({
+        event: "paper_trade_not_opened_after_signal",
+        symbol: signal.symbol,
+        signalId: signal.id,
+        direction: signal.direction,
+        finalScore: analysis.score,
+        reason: "execution_service_rejected_or_returned_null",
+      }, "Paper trade was not opened after active signal");
+    }
+    return trade;
   }
 
   private async addToWatchlist(symbol: string, analysis: any) {
@@ -453,8 +494,8 @@ export class ScannerService {
 
           const newSignal = await this.saveSignal(item.symbol, decisionAnalysis, "active");
           const riskCheck = await riskManager.canTrade();
-          const canTrade = await this.checkTradingLimits();
-          if (riskCheck.allowed && canTrade) {
+          const tradeLimitCheck = await this.checkTradingLimits();
+          if (riskCheck.allowed && tradeLimitCheck.allowed) {
             await Telegram.signalCreated({
               symbol: item.symbol, direction: decisionAnalysis.direction, score: decisionAnalysis.score,
               grade: decisionAnalysis.grade, confidence: decisionAnalysis.confidence,
@@ -465,6 +506,29 @@ export class ScannerService {
               timeframeAlignment: decisionAnalysis.timeframeAlignment,
             });
             await this.openPaperTrade(newSignal, decisionAnalysis);
+          } else {
+            const riskBlocked = !riskCheck.allowed;
+            const limitBlocked = !tradeLimitCheck.allowed;
+            logger.warn({
+              event: "watchlist_signal_saved_without_trade",
+              symbol: item.symbol,
+              direction: decisionAnalysis.direction,
+              finalScore: decision.finalScore,
+              blockType: riskBlocked && limitBlocked
+                ? "risk_manager_and_trading_limit"
+                : riskBlocked
+                  ? "risk_manager"
+                  : "trading_limit",
+              reason: riskBlocked ? riskCheck.reason : tradeLimitCheck.reason,
+              details: {
+                riskAllowed: riskCheck.allowed,
+                riskReason: riskCheck.reason,
+                tradingLimitAllowed: tradeLimitCheck.allowed,
+                tradingLimitReason: tradeLimitCheck.reason,
+                tradingLimitDetails: tradeLimitCheck.details,
+              },
+              signalId: newSignal.id,
+            }, "Watchlist promotion signal saved without paper trade");
           }
         }
         await sleep(config.watchlistCheckCooldownMs);
@@ -481,21 +545,33 @@ export class ScannerService {
       .where(and(eq(watchlistTable.isActive, true), lt(watchlistTable.expiresAt!, now)));
   }
 
-  private async checkTradingLimits(): Promise<boolean> {
+  private async checkTradingLimits(): Promise<TradingLimitCheck> {
     const config = (await configService.get()).scanner;
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay()); weekStart.setHours(0, 0, 0, 0);
 
     const [openCount] = await db.select({ c: count() }).from(paperTradesTable).where(eq(paperTradesTable.status, "open"));
-    if (Number(openCount.c) >= config.maxOpenTrades) { logger.info({ open: openCount.c }, "Max open trades reached"); return false; }
+    if (Number(openCount.c) >= config.maxOpenTrades) {
+      const details = { openTrades: Number(openCount.c), maxOpenTrades: config.maxOpenTrades };
+      logger.info({ ...details }, "Max open trades reached");
+      return { allowed: false, reason: "Max open trades reached", details };
+    }
 
     const [dailyCount] = await db.select({ c: count() }).from(paperTradesTable).where(gte(paperTradesTable.openedAt, today));
-    if (Number(dailyCount.c) >= config.maxDailyTrades) { logger.info({ daily: dailyCount.c }, "Max daily trades reached"); return false; }
+    if (Number(dailyCount.c) >= config.maxDailyTrades) {
+      const details = { dailyTrades: Number(dailyCount.c), maxDailyTrades: config.maxDailyTrades };
+      logger.info({ ...details }, "Max daily trades reached");
+      return { allowed: false, reason: "Max daily trades reached", details };
+    }
 
     const [weeklyCount] = await db.select({ c: count() }).from(paperTradesTable).where(gte(paperTradesTable.openedAt, weekStart));
-    if (Number(weeklyCount.c) >= config.maxWeeklyTrades) { logger.info({ weekly: weeklyCount.c }, "Max weekly trades reached"); return false; }
+    if (Number(weeklyCount.c) >= config.maxWeeklyTrades) {
+      const details = { weeklyTrades: Number(weeklyCount.c), maxWeeklyTrades: config.maxWeeklyTrades };
+      logger.info({ ...details }, "Max weekly trades reached");
+      return { allowed: false, reason: "Max weekly trades reached", details };
+    }
 
-    return true;
+    return { allowed: true, reason: "OK" };
   }
 
   private async saveScannerDiagnostic(symbol: string, direction: "LONG" | "SHORT", reason: string, strategy: string) {

@@ -64,7 +64,15 @@ export class TradeService {
       telegram: { rrRatio: analysis.rrRatio ?? undefined },
     });
 
-    logger.info({ tradeId, symbol: signal.symbol, direction: signal.direction, setupType: analysis.setupType }, "Paper trade opened");
+    logger.info({
+      event: "paper_trade_opened",
+      tradeId,
+      signalId: signal.id,
+      symbol: signal.symbol,
+      direction: signal.direction,
+      entryPrice: execution.entryPrice,
+      setupType: analysis.setupType,
+    }, "Paper trade opened");
     return trade;
   }
 
