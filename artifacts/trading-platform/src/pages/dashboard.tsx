@@ -32,6 +32,7 @@ type ScannerDiagnosticDecision = {
   reasons: string[];
   riskSummary: string[];
   scansToday: number;
+  scoreAvailable?: boolean;
   createdAt: string;
 };
 
@@ -580,7 +581,7 @@ function DecisionPartition({
                 <span className="line-clamp-1 text-muted-foreground">
                   {decision.reasons[0] ?? decision.riskSummary[0] ?? "---"}
                 </span>
-                <span className="font-mono text-foreground">{decision.finalScore.toFixed(1)}</span>
+                <span className="font-mono text-foreground">{formatDecisionScore(decision)}</span>
               </div>
             </div>
           ))}
@@ -588,6 +589,11 @@ function DecisionPartition({
       )}
     </div>
   );
+}
+
+function formatDecisionScore(decision?: Pick<ScannerDiagnosticDecision, "finalScore" | "scoreAvailable">): string {
+  if (!decision?.scoreAvailable) return "N/A";
+  return formatScore(decision.finalScore);
 }
 
 function formatScore(value?: number): string {

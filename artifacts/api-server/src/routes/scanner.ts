@@ -71,13 +71,13 @@ router.post("/stop", async (req, res) => {
 router.get("/gainers", async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 20, 100);
   const gainers = await getLatestUniqueSnapshots("gainer", limit);
-  res.json(gainers.map(formatSnapshot));
+  res.json(await enrichSnapshotsWithDecisions(gainers, "LONG"));
 });
 
 router.get("/losers", async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 20, 100);
   const losers = await getLatestUniqueSnapshots("loser", limit);
-  res.json(losers.map(formatSnapshot));
+  res.json(await enrichSnapshotsWithDecisions(losers, "SHORT"));
 });
 
 async function getLatestUniqueSnapshots(listType: "gainer" | "loser", limit: number) {
@@ -317,6 +317,53 @@ function formatSnapshot(s: any) {
   };
 }
 
+async function enrichSnapshotsWithDecisions(
+  snapshots: Array<typeof marketSnapshotsTable.$inferSelect>,
+  direction: "LONG" | "SHORT"
+) {
+  if (snapshots.length === 0) return [];
+
+  const symbols = snapshots.map((snapshot) => snapshot.symbol);
+  const oldestSnapshotAt = snapshots.reduce(
+    (oldest, snapshot) => snapshot.scannedAt < oldest ? snapshot.scannedAt : oldest,
+    snapshots[0].scannedAt
+  );
+  const decisionCandidates = await db
+    .select()
+    .from(scannerDecisionsTable)
+    .where(and(
+      inArray(scannerDecisionsTable.symbol, symbols),
+      eq(scannerDecisionsTable.direction, direction),
+      gte(scannerDecisionsTable.createdAt, oldestSnapshotAt),
+    ))
+    .orderBy(desc(scannerDecisionsTable.createdAt));
+
+  const latestDecisionBySymbol = new Map<string, typeof scannerDecisionsTable.$inferSelect>();
+  for (const decision of decisionCandidates) {
+    if (!latestDecisionBySymbol.has(decision.symbol)) {
+      latestDecisionBySymbol.set(decision.symbol, decision);
+    }
+  }
+
+  return snapshots.map((snapshot) => {
+    const decision = latestDecisionBySymbol.get(snapshot.symbol);
+    return {
+      ...formatSnapshot(snapshot),
+      latestDecision: decision
+        ? {
+          decision: displayDecision(decision),
+          scoreAvailable: hasDecisionScore(decision),
+          finalScore: Number(decision.finalScore),
+          technicalScore: Number(decision.technicalScore),
+          strategy: decision.strategy,
+          reason: asStringArray(decision.reasons)[0] ?? null,
+          createdAt: decision.createdAt,
+        }
+        : null,
+    };
+  });
+}
+
 function formatDecision(decision: typeof scannerDecisionsTable.$inferSelect, scansToday = 0) {
   const reasons = asStringArray(decision.reasons);
 
@@ -335,8 +382,13 @@ function formatDecision(decision: typeof scannerDecisionsTable.$inferSelect, sca
     reasons,
     riskSummary: asStringArray(decision.riskSummary),
     scansToday,
+    scoreAvailable: hasDecisionScore(decision),
     createdAt: decision.createdAt,
   };
+}
+
+function hasDecisionScore(decision: typeof scannerDecisionsTable.$inferSelect): boolean {
+  return Number(decision.finalScore) > 0 || Number(decision.technicalScore) > 0;
 }
 
 function displayDecision(decision: typeof scannerDecisionsTable.$inferSelect): string {

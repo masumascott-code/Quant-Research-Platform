@@ -1,11 +1,26 @@
 import { useGetScannerStatus, useStartScanner, useStopScanner, getGetScannerStatusQueryKey, useGetTopGainers, useGetTopLosers, getGetTopGainersQueryKey, getGetTopLosersQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Play, Square, Activity, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+type LiveScannerCoin = {
+  id: number;
+  symbol: string;
+  price: number;
+  priceChangePercent: number;
+  rvol: number;
+  latestDecision?: {
+    decision: string;
+    scoreAvailable: boolean;
+    finalScore: number;
+    reason?: string | null;
+  } | null;
+};
 
 export default function Scanner() {
   const { toast } = useToast();
@@ -19,20 +34,20 @@ export default function Scanner() {
   });
 
   const { data: gainers, isLoading: gainersLoading } = useGetTopGainers(
-    { limit: 5 },
+    { limit: 20 },
     {
       query: {
-        queryKey: getGetTopGainersQueryKey({ limit: 5 }),
+        queryKey: getGetTopGainersQueryKey({ limit: 20 }),
         refetchInterval: 30000
       }
     }
   );
 
   const { data: losers, isLoading: losersLoading } = useGetTopLosers(
-    { limit: 5 },
+    { limit: 20 },
     {
       query: {
-        queryKey: getGetTopLosersQueryKey({ limit: 5 }),
+        queryKey: getGetTopLosersQueryKey({ limit: 20 }),
         refetchInterval: 30000
       }
     }
@@ -117,7 +132,7 @@ export default function Scanner() {
               ) : gainers?.length === 0 ? (
                 <div className="py-6 text-center text-sm font-mono text-muted-foreground">NO GAINERS DETECTED</div>
               ) : (
-                gainers?.map((coin) => (
+                (gainers as LiveScannerCoin[] | undefined)?.map((coin) => (
                   <div key={`${coin.symbol}-${coin.id}`} className="rounded-md border border-border bg-muted/20 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -135,9 +150,13 @@ export default function Scanner() {
                         <div className="mt-1 text-foreground">{coin.price.toFixed(4)}</div>
                       </div>
                       <div className="rounded border border-border bg-background/40 p-2">
-                        <div className="text-[10px] uppercase text-muted-foreground">Signal</div>
-                        <div className="mt-1 text-success">Gainer</div>
+                        <div className="text-[10px] uppercase text-muted-foreground">Score</div>
+                        <div className="mt-1 text-foreground">{formatLiveScore(coin.latestDecision)}</div>
                       </div>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-xs font-mono">
+                      {renderDecisionBadge(coin.latestDecision)}
+                      <span className="line-clamp-1 text-muted-foreground">{coin.latestDecision?.reason ?? "No recent decision"}</span>
                     </div>
                   </div>
                 ))
@@ -151,6 +170,8 @@ export default function Scanner() {
                   <TableHead className="font-mono text-xs text-muted-foreground text-right">PRICE</TableHead>
                   <TableHead className="font-mono text-xs text-muted-foreground text-right">24H %</TableHead>
                   <TableHead className="font-mono text-xs text-muted-foreground text-right">RVOL</TableHead>
+                  <TableHead className="font-mono text-xs text-muted-foreground text-right">SCORE</TableHead>
+                  <TableHead className="font-mono text-xs text-muted-foreground text-right">DECISION</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -161,19 +182,23 @@ export default function Scanner() {
                       <TableCell align="right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
                       <TableCell align="right"><Skeleton className="h-4 w-12 ml-auto" /></TableCell>
                       <TableCell align="right"><Skeleton className="h-4 w-10 ml-auto" /></TableCell>
+                      <TableCell align="right"><Skeleton className="h-4 w-10 ml-auto" /></TableCell>
+                      <TableCell align="right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
                     </TableRow>
                   ))
                 ) : gainers?.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-6 text-muted-foreground font-mono text-sm">NO GAINERS DETECTED</TableCell>
+                    <TableCell colSpan={6} className="text-center py-6 text-muted-foreground font-mono text-sm">NO GAINERS DETECTED</TableCell>
                   </TableRow>
                 ) : (
-                  gainers?.map((coin) => (
+                  (gainers as LiveScannerCoin[] | undefined)?.map((coin) => (
                     <TableRow key={`${coin.symbol}-${coin.id}`} className="border-border hover:bg-muted/50">
                       <TableCell className="font-mono font-bold">{coin.symbol}</TableCell>
                       <TableCell className="font-mono text-right">{coin.price.toFixed(4)}</TableCell>
                       <TableCell className="font-mono text-right text-success">+{coin.priceChangePercent.toFixed(2)}%</TableCell>
                       <TableCell className="font-mono text-right text-muted-foreground">{coin.rvol.toFixed(1)}x</TableCell>
+                      <TableCell className="font-mono text-right">{formatLiveScore(coin.latestDecision)}</TableCell>
+                      <TableCell className="text-right">{renderDecisionBadge(coin.latestDecision)}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -206,7 +231,7 @@ export default function Scanner() {
               ) : losers?.length === 0 ? (
                 <div className="py-6 text-center text-sm font-mono text-muted-foreground">NO LOSERS DETECTED</div>
               ) : (
-                losers?.map((coin) => (
+                (losers as LiveScannerCoin[] | undefined)?.map((coin) => (
                   <div key={`${coin.symbol}-${coin.id}`} className="rounded-md border border-border bg-muted/20 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -224,9 +249,13 @@ export default function Scanner() {
                         <div className="mt-1 text-foreground">{coin.price.toFixed(4)}</div>
                       </div>
                       <div className="rounded border border-border bg-background/40 p-2">
-                        <div className="text-[10px] uppercase text-muted-foreground">Signal</div>
-                        <div className="mt-1 text-destructive">Loser</div>
+                        <div className="text-[10px] uppercase text-muted-foreground">Score</div>
+                        <div className="mt-1 text-foreground">{formatLiveScore(coin.latestDecision)}</div>
                       </div>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-xs font-mono">
+                      {renderDecisionBadge(coin.latestDecision)}
+                      <span className="line-clamp-1 text-muted-foreground">{coin.latestDecision?.reason ?? "No recent decision"}</span>
                     </div>
                   </div>
                 ))
@@ -240,6 +269,8 @@ export default function Scanner() {
                   <TableHead className="font-mono text-xs text-muted-foreground text-right">PRICE</TableHead>
                   <TableHead className="font-mono text-xs text-muted-foreground text-right">24H %</TableHead>
                   <TableHead className="font-mono text-xs text-muted-foreground text-right">RVOL</TableHead>
+                  <TableHead className="font-mono text-xs text-muted-foreground text-right">SCORE</TableHead>
+                  <TableHead className="font-mono text-xs text-muted-foreground text-right">DECISION</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -250,19 +281,23 @@ export default function Scanner() {
                       <TableCell align="right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
                       <TableCell align="right"><Skeleton className="h-4 w-12 ml-auto" /></TableCell>
                       <TableCell align="right"><Skeleton className="h-4 w-10 ml-auto" /></TableCell>
+                      <TableCell align="right"><Skeleton className="h-4 w-10 ml-auto" /></TableCell>
+                      <TableCell align="right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
                     </TableRow>
                   ))
                 ) : losers?.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-6 text-muted-foreground font-mono text-sm">NO LOSERS DETECTED</TableCell>
+                    <TableCell colSpan={6} className="text-center py-6 text-muted-foreground font-mono text-sm">NO LOSERS DETECTED</TableCell>
                   </TableRow>
                 ) : (
-                  losers?.map((coin) => (
+                  (losers as LiveScannerCoin[] | undefined)?.map((coin) => (
                     <TableRow key={`${coin.symbol}-${coin.id}`} className="border-border hover:bg-muted/50">
                       <TableCell className="font-mono font-bold">{coin.symbol}</TableCell>
                       <TableCell className="font-mono text-right">{coin.price.toFixed(4)}</TableCell>
                       <TableCell className="font-mono text-right text-destructive">{coin.priceChangePercent.toFixed(2)}%</TableCell>
                       <TableCell className="font-mono text-right text-muted-foreground">{coin.rvol.toFixed(1)}x</TableCell>
+                      <TableCell className="font-mono text-right">{formatLiveScore(coin.latestDecision)}</TableCell>
+                      <TableCell className="text-right">{renderDecisionBadge(coin.latestDecision)}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -274,4 +309,26 @@ export default function Scanner() {
       </div>
     </div>
   );
+}
+
+function formatLiveScore(decision?: LiveScannerCoin["latestDecision"]) {
+  if (!decision) return "---";
+  if (!decision.scoreAvailable) return "N/A";
+  return Number.isFinite(decision.finalScore) ? decision.finalScore.toFixed(1) : "---";
+}
+
+function renderDecisionBadge(decision?: LiveScannerCoin["latestDecision"]) {
+  if (!decision) {
+    return <Badge variant="outline" className="font-mono text-xs text-muted-foreground">UNSCANNED</Badge>;
+  }
+
+  if (decision.decision === "ACCEPTED") {
+    return <Badge className="font-mono text-xs bg-success text-success-foreground">ACCEPTED</Badge>;
+  }
+
+  if (decision.decision === "SKIPPED") {
+    return <Badge variant="outline" className="font-mono text-xs border-yellow-500/40 bg-yellow-500/10 text-yellow-400">SKIPPED</Badge>;
+  }
+
+  return <Badge variant="outline" className="font-mono text-xs text-destructive border-destructive/40">REJECTED</Badge>;
 }
