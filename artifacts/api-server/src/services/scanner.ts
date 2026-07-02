@@ -2,6 +2,7 @@ import { db } from "@workspace/db";
 import {
   coinsTable,
   marketSnapshotsTable,
+  scannerDecisionsTable,
   signalsTable,
   paperTradesTable,
   watchlistTable,
@@ -203,10 +204,16 @@ export class ScannerService {
     try {
       // Pre-filter with quick RVOL check on 15m
       const candles15m = await this.fetchCandles(symbol, "15m", config.candles15mLimit, config);
-      if (candles15m.length < config.minCandles15m) return;
+      if (candles15m.length < config.minCandles15m) {
+        await this.saveScannerDiagnostic(symbol, direction, "Insufficient 15m candle history", "Pre-filter");
+        return;
+      }
 
       const rvol = this.calculateRvol(candles15m, config.volumeLookback) ?? 1;
-      if (rvol < config.minRvol) return;
+      if (rvol < config.minRvol) {
+        await this.saveScannerDiagnostic(symbol, direction, `RVOL below minimum (${rvol.toFixed(2)} < ${config.minRvol})`, "Pre-filter");
+        return;
+      }
 
       // Fetch all timeframes for multi-TF analysis
       const [candles5m, candlesH1] = await Promise.all([
@@ -220,7 +227,10 @@ export class ScannerService {
         ? analyzeForLong(symbol, candles15m, currentPrice, volume24h, mtf, runtimeConfig.signal)
         : analyzeForShort(symbol, candles15m, currentPrice, volume24h, mtf, runtimeConfig.signal);
 
-      if (!analysis) return;
+      if (!analysis) {
+        await this.saveScannerDiagnostic(symbol, direction, `No qualifying ${direction} setup after technical checks`, "Technical Filter");
+        return;
+      }
       const decision = await scannerDecisionEngine.decide({
         symbol,
         direction,
@@ -431,6 +441,27 @@ export class ScannerService {
     if (Number(weeklyCount.c) >= config.maxWeeklyTrades) { logger.info({ weekly: weeklyCount.c }, "Max weekly trades reached"); return false; }
 
     return true;
+  }
+
+  private async saveScannerDiagnostic(symbol: string, direction: "LONG" | "SHORT", reason: string, strategy: string) {
+    try {
+      await db.insert(scannerDecisionsTable).values({
+        symbol,
+        direction,
+        decision: "REJECTED",
+        strategy,
+        finalScore: "0",
+        technicalScore: "0",
+        confidence: "0",
+        marketRegime: "UNQUALIFIED",
+        opportunityRank: null,
+        riskGrade: "LOW",
+        reasons: [reason],
+        riskSummary: [],
+      });
+    } catch (err) {
+      logger.warn({ err, symbol }, "Failed to persist scanner diagnostic");
+    }
   }
 
 }
