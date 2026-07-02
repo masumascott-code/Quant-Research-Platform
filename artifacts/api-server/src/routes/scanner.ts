@@ -236,6 +236,7 @@ router.get("/diagnostics", async (req, res) => {
 });
 
 router.get("/dashboard", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   await reconcileSignalStatuses();
 
   const scanner = ScannerService.getInstance();

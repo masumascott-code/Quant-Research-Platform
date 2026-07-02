@@ -7,6 +7,7 @@ import { reconcileSignalStatuses } from "../services/signal-status";
 const router = Router();
 
 router.get("/", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   await reconcileSignalStatuses();
 
   const limit = Math.min(Number(req.query.limit) || 50, 200);
@@ -31,6 +32,7 @@ router.get("/", async (req, res) => {
 });
 
 router.get("/active", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   await reconcileSignalStatuses();
 
   const signals = await db
@@ -43,6 +45,7 @@ router.get("/active", async (req, res) => {
 });
 
 router.get("/:id", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   await reconcileSignalStatuses();
 
   const id = Number(req.params.id);
