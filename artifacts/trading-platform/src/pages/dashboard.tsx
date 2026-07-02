@@ -67,6 +67,11 @@ type ScannerDiagnostics = {
     topRejectedReasons: Array<{ reason: string; count: number }>;
   };
   recentDecisions: ScannerDiagnosticDecision[];
+  partitions?: {
+    accepted: ScannerDiagnosticDecision[];
+    skipped: ScannerDiagnosticDecision[];
+    rejected: ScannerDiagnosticDecision[];
+  };
   recentSnapshots?: ScannerDiagnosticSnapshot[];
 };
 
@@ -339,6 +344,11 @@ function ScannerDiagnosticsPanel() {
 
   const latestDecision = data?.recentDecisions[0];
   const latestSnapshot = data?.recentSnapshots?.[0];
+  const partitions = data?.partitions ?? {
+    accepted: data?.recentDecisions.filter((decision) => decision.decision === "ACCEPTED") ?? [],
+    skipped: data?.recentDecisions.filter((decision) => decision.decision === "SKIPPED") ?? [],
+    rejected: data?.recentDecisions.filter((decision) => decision.decision === "REJECTED") ?? [],
+  };
   const showScanActivity = !isLoading && (data?.today.totalDecisions ?? 0) === 0 && !!latestSnapshot;
   const latestReason = latestDecision?.reasons[0] ?? latestDecision?.riskSummary[0] ?? "---";
 
@@ -387,8 +397,19 @@ function ScannerDiagnosticsPanel() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-0">
-              <div className="min-w-0">
-                <Table>
+              <div className="min-w-0 p-4">
+                {isLoading ? (
+                  <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <Skeleton key={i} className="h-56 w-full" />
+                    ))}
+                  </div>
+                ) : data?.diagnosticsAvailable === false ? (
+                  <div className="flex h-56 items-center justify-center text-muted-foreground font-mono text-sm">
+                    DECISION HISTORY UNAVAILABLE
+                  </div>
+                ) : showScanActivity ? (
+                  <Table>
                   <TableHeader>
                     <TableRow className="border-border hover:bg-transparent">
                       <TableHead className="font-mono text-xs text-muted-foreground">TIME</TableHead>
@@ -401,24 +422,7 @@ function ScannerDiagnosticsPanel() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {isLoading ? (
-                      Array.from({ length: 5 }).map((_, i) => (
-                        <TableRow key={i} className="border-border">
-                          <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                          <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                          <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                          <TableCell><Skeleton className="h-4 w-12 ml-auto" /></TableCell>
-                          <TableCell><Skeleton className="h-4 w-full" /></TableCell>
-                        </TableRow>
-                      ))
-                    ) : data?.diagnosticsAvailable === false ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground font-mono text-sm">
-                          DECISION HISTORY UNAVAILABLE
-                        </TableCell>
-                      </TableRow>
-                    ) : showScanActivity ? (
-                      data?.recentSnapshots?.map((snapshot) => (
+                    {data?.recentSnapshots?.map((snapshot) => (
                         <TableRow key={snapshot.id} className="border-border hover:bg-muted/50">
                           <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
                             {formatTime(snapshot.scannedAt)}
@@ -443,51 +447,16 @@ function ScannerDiagnosticsPanel() {
                             </span>
                           </TableCell>
                         </TableRow>
-                      ))
-                    ) : data?.recentDecisions.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground font-mono text-sm">
-                          NO SCANNER DECISIONS RECORDED
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      data?.recentDecisions.map((decision) => (
-                        <TableRow key={decision.id} className="border-border hover:bg-muted/50">
-                          <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
-                            {formatTime(decision.createdAt)}
-                          </TableCell>
-                          <TableCell className="font-mono font-bold whitespace-nowrap">
-                            <span>{decision.symbol}</span>
-                            <span className={`ml-2 text-xs ${decision.direction === "LONG" ? "text-success" : "text-destructive"}`}>
-                              {decision.direction}
-                            </span>
-                            {decision.scansToday > 1 && (
-                              <span className="ml-2 rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                x{decision.scansToday}
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={decision.decision === "ACCEPTED" ? "default" : "outline"}
-                              className={`font-mono ${decisionBadgeClass(decision.decision)}`}
-                            >
-                              {decision.decision}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-mono text-right">
-                            {decision.finalScore.toFixed(1)}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground max-w-[360px]">
-                            <span className="line-clamp-1">
-                              {decision.reasons[0] ?? decision.riskSummary[0] ?? "---"}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
+                      ))}
                   </TableBody>
                 </Table>
+                ) : (
+                  <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <DecisionPartition title="Accepted" decisions={partitions.accepted} accentClassName="text-success" />
+                    <DecisionPartition title="Skipped" decisions={partitions.skipped} accentClassName="text-yellow-400" />
+                    <DecisionPartition title="Rejected" decisions={partitions.rejected} accentClassName="text-destructive" />
+                  </div>
+                )}
               </div>
 
               <div className="border-t lg:border-t-0 lg:border-l border-border p-4 space-y-4">
@@ -563,6 +532,59 @@ function DiagnosticStat({
         <Skeleton className="mt-3 h-6 w-16" />
       ) : (
         <div className={`mt-2 font-mono text-xl font-bold ${valueClassName}`}>{value}</div>
+      )}
+    </div>
+  );
+}
+
+function DecisionPartition({
+  title,
+  decisions,
+  accentClassName,
+}: {
+  title: string;
+  decisions: ScannerDiagnosticDecision[];
+  accentClassName: string;
+}) {
+  return (
+    <div className="min-h-[260px] rounded-md border border-border bg-muted/10">
+      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <span className={`font-mono text-xs uppercase ${accentClassName}`}>{title}</span>
+        <span className="font-mono text-xs text-muted-foreground">{decisions.length}</span>
+      </div>
+      {decisions.length === 0 ? (
+        <div className="flex h-48 items-center justify-center text-xs font-mono text-muted-foreground">
+          NO RECENT {title.toUpperCase()}
+        </div>
+      ) : (
+        <div className="divide-y divide-border">
+          {decisions.map((decision) => (
+            <div key={decision.id} className="px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="font-mono text-sm font-bold">{decision.symbol}</span>
+                  <span className={`ml-2 text-xs ${decision.direction === "LONG" ? "text-success" : "text-destructive"}`}>
+                    {decision.direction}
+                  </span>
+                  {decision.scansToday > 1 && (
+                    <span className="ml-2 rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                      x{decision.scansToday}
+                    </span>
+                  )}
+                </div>
+                <span className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+                  {formatTime(decision.createdAt)}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-3 text-xs">
+                <span className="line-clamp-1 text-muted-foreground">
+                  {decision.reasons[0] ?? decision.riskSummary[0] ?? "---"}
+                </span>
+                <span className="font-mono text-foreground">{decision.finalScore.toFixed(1)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
