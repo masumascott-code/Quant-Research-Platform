@@ -24,9 +24,6 @@ export class MarketFilter {
     if (input.context.volatilityScore < config.minVolatilityScore || input.context.volatilityScore > config.maxVolatilityScore) {
       rejectedReasons.push(`Volatility outside allowed range (${input.context.volatilityScore.toFixed(2)})`);
     }
-    if (input.duplicateActiveSignal) {
-      rejectedReasons.push("Duplicate active signal exists");
-    }
     if (!input.portfolioAllowed) {
       rejectedReasons.push(input.portfolioReason ?? "Portfolio exposure would be exceeded");
     }

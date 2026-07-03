@@ -23,13 +23,13 @@ function context(confidence: number): MarketContext {
   };
 }
 
-test("MarketFilter rejects duplicate active signals", () => {
+test("MarketFilter allows duplicate active signals to be handled by scanner reuse", () => {
   const result = new MarketFilter().evaluate({
     context: context(80),
     duplicateActiveSignal: true,
     portfolioAllowed: true,
   });
 
-  assert.equal(result.accepted, false);
-  assert.ok(result.rejectedReasons.includes("Duplicate active signal exists"));
+  assert.equal(result.accepted, true);
+  assert.equal(result.rejectedReasons.includes("Duplicate active signal exists"), false);
 });

@@ -315,7 +315,7 @@ export class ScannerService {
         const tradeLimitCheck = await this.checkTradingLimits();
         if (!tradeLimitCheck.allowed) {
           // Save as signal but don't open trade
-          const newSignal = await this.saveSignal(symbol, decisionAnalysis, "active");
+          const newSignal = await this.saveOrReuseActiveSignal(symbol, decisionAnalysis);
           logger.warn({
             event: "signal_saved_without_trade",
             blockType: "trading_limit",
@@ -331,7 +331,7 @@ export class ScannerService {
 
         if (!riskCheck.allowed) {
           logger.info({ symbol, reason: "risk manager paused" }, "Skipping trade — risk manager paused");
-          const newSignal = await this.saveSignal(symbol, decisionAnalysis, "active");
+          const newSignal = await this.saveOrReuseActiveSignal(symbol, decisionAnalysis);
           logger.warn({
             event: "signal_saved_without_trade",
             blockType: "risk_manager",
@@ -344,7 +344,7 @@ export class ScannerService {
           return;
         }
 
-        const newSignal = await this.saveSignal(symbol, decisionAnalysis, "active");
+        const newSignal = await this.saveOrReuseActiveSignal(symbol, decisionAnalysis);
         await Telegram.signalCreated({
           symbol, direction: decisionAnalysis.direction, score: decisionAnalysis.score,
           grade: decisionAnalysis.grade, confidence: decisionAnalysis.confidence,
@@ -386,6 +386,68 @@ export class ScannerService {
       expiresAt,
     }).returning();
     return newSignal;
+  }
+
+  private async saveOrReuseActiveSignal(symbol: string, analysis: any) {
+    const expiresAt = new Date(Date.now() + configService.getSync().scanner.signalTtlMs);
+    const values = {
+      direction: analysis.direction,
+      score: String(analysis.score),
+      grade: analysis.grade!,
+      confidence: analysis.confidence,
+      setupType: analysis.setupType,
+      entryPrice: String(analysis.entryPrice),
+      stopLoss: String(analysis.stopLoss),
+      tp1: String(analysis.tp1),
+      tp2: String(analysis.tp2),
+      tp3: String(analysis.tp3),
+      rrRatio: String(analysis.rrRatio),
+      reason: analysis.reason,
+      slReason: analysis.slReason,
+      whyNow: analysis.whyNow,
+      whyNotEarlier: analysis.whyNotEarlier,
+      whyLong: analysis.whyLong,
+      whySl: analysis.whySl,
+      whyTp: analysis.whyTp,
+      timeframeAlignment: analysis.timeframeAlignment,
+      trendScore: String(analysis.trendScore),
+      emaScore: String(analysis.emaScore),
+      volumeScore: String(analysis.volumeScore),
+      rvolScore: String(analysis.rvolScore),
+      breakoutScore: String(analysis.breakoutScore),
+      retestScore: String(analysis.retestScore),
+      structureScore: String(analysis.structureScore),
+      momentumScore: String(analysis.momentumScore),
+      expiresAt,
+    };
+
+    const [existing] = await db.select()
+      .from(signalsTable)
+      .where(and(
+        eq(signalsTable.symbol, symbol),
+        eq(signalsTable.direction, analysis.direction),
+        eq(signalsTable.status, "active"),
+      ))
+      .orderBy(desc(signalsTable.createdAt))
+      .limit(1);
+
+    if (!existing) {
+      return await this.saveSignal(symbol, analysis, "active");
+    }
+
+    const [updated] = await db.update(signalsTable)
+      .set(values)
+      .where(eq(signalsTable.id, existing.id))
+      .returning();
+
+    logger.info({
+      symbol,
+      direction: analysis.direction,
+      signalId: existing.id,
+      finalScore: analysis.score,
+    }, "Reused active signal for trade attempt");
+
+    return updated ?? existing;
   }
 
   private async openPaperTrade(signal: any, analysis: any) {
@@ -492,7 +554,7 @@ export class ScannerService {
           await db.update(watchlistTable).set({ isActive: false, promoted: true }).where(eq(watchlistTable.id, item.id));
           logger.info({ symbol: item.symbol, score: decision.finalScore }, "Watchlist item promoted to signal");
 
-          const newSignal = await this.saveSignal(item.symbol, decisionAnalysis, "active");
+          const newSignal = await this.saveOrReuseActiveSignal(item.symbol, decisionAnalysis);
           const riskCheck = await riskManager.canTrade();
           const tradeLimitCheck = await this.checkTradingLimits();
           if (riskCheck.allowed && tradeLimitCheck.allowed) {
