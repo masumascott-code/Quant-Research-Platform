@@ -70,3 +70,23 @@ test("invalidRawValues accepts valid QE numeric values", () => {
 
   assert.deepEqual(issues, []);
 });
+
+test("risk auto loss limits default to disabled", () => {
+  assert.equal(ConfigurationValidator.defaults().risk.autoLossLimitsEnabled, false);
+});
+
+test("risk auto loss limits can be enabled by canonical key", () => {
+  const config = ConfigurationValidator.parseRawValues({
+    "risk.autoLossLimitsEnabled": "true",
+  });
+
+  assert.equal(config.risk.autoLossLimitsEnabled, true);
+});
+
+test("risk auto loss limits can be enabled by legacy-style alias", () => {
+  const config = ConfigurationValidator.parseRawValues({
+    auto_loss_limits_enabled: "true",
+  });
+
+  assert.equal(config.risk.autoLossLimitsEnabled, true);
+});

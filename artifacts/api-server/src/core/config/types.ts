@@ -90,6 +90,7 @@ export interface RiskRuntimeConfig {
   maxAccountRiskPercent: number;
   maxSectorExposurePercent: number;
   maxCoinExposurePercent: number;
+  autoLossLimitsEnabled: boolean;
   killSwitch: boolean;
 }
 

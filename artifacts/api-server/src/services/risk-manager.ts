@@ -49,14 +49,22 @@ class RiskManager {
     const cooldownUntil = cooldownUntilStr ? new Date(cooldownUntilStr) : null;
     const lastTradeAt = lastTradeStr ? new Date(lastTradeStr) : null;
 
-    const isPaused = pauseUntil !== null && pauseUntil > new Date();
+    let isPaused = pauseUntil !== null && pauseUntil > new Date();
+    let activePauseReason = pauseReason;
+
+    const config = (await configService.get()).risk;
+    if (isPaused && !config.autoLossLimitsEnabled && this.isAutoLossPauseReason(activePauseReason)) {
+      await this.resume();
+      isPaused = false;
+      activePauseReason = null;
+    }
 
     const consecutiveLosses = await this.getConsecutiveLosses();
     const dailyLossPercent = await this.getDailyLossPercent();
 
     return {
       isPaused,
-      pauseReason: isPaused ? pauseReason : null,
+      pauseReason: isPaused ? activePauseReason : null,
       pauseUntil: isPaused ? pauseUntil : null,
       consecutiveLosses,
       lastTradeAt,
@@ -83,12 +91,12 @@ class RiskManager {
       return { allowed: false, reason: `Cooldown active — ${mins}m remaining after last trade.` };
     }
 
-    if (state.dailyLossPercent >= config.dailyDrawdownLimitPercent) {
+    if (config.autoLossLimitsEnabled && state.dailyLossPercent >= config.dailyDrawdownLimitPercent) {
       await this.pause(`Daily drawdown limit ${config.dailyDrawdownLimitPercent}% reached`, config.emergencyPauseMinutes);
       return { allowed: false, reason: `Daily drawdown limit hit (${state.dailyLossPercent.toFixed(2)}%). Trading paused until tomorrow.` };
     }
 
-    if (state.consecutiveLosses >= config.maxConsecutiveLosses) {
+    if (config.autoLossLimitsEnabled && state.consecutiveLosses >= config.maxConsecutiveLosses) {
       await this.pause(`${config.maxConsecutiveLosses} consecutive losses`, config.pauseAfterLossesMinutes);
       return { allowed: false, reason: `${config.maxConsecutiveLosses} consecutive losses — trading paused for ${config.pauseAfterLossesMinutes}m.` };
     }
@@ -107,6 +115,8 @@ class RiskManager {
 
   async recordTradeClosed(result: string): Promise<void> {
     const config = (await configService.get()).risk;
+    if (!config.autoLossLimitsEnabled) return;
+
     if (result === "LOSS") {
       const losses = await this.getConsecutiveLosses();
       if (losses + 1 >= config.maxConsecutiveLosses) {
@@ -161,6 +171,13 @@ class RiskManager {
       .reduce((sum, t) => sum + Math.abs(Number(t.pnlPercent ?? 0)), 0);
 
     return totalLoss;
+  }
+
+  private isAutoLossPauseReason(reason: string | null): boolean {
+    return reason != null && (
+      /daily drawdown limit/i.test(reason) ||
+      /consecutive losses/i.test(reason)
+    );
   }
 }
 

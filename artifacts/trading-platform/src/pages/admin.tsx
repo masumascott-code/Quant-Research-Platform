@@ -174,6 +174,7 @@ const PRIMARY_SETTING_KEYS = [
   "paperTrading.fixedTradeNotional",
   "risk.riskPercent",
   "risk.cooldownMinutes",
+  "risk.autoLossLimitsEnabled",
   "risk.maxConsecutiveLosses",
   "notifications.telegramEnabled",
 ] as const;
@@ -190,6 +191,7 @@ function settingLabel(key: string) {
     "paperTrading.fixedTradeNotional": "Trade Size (USDT)",
     "risk.riskPercent": "Risk % per Trade",
     "risk.cooldownMinutes": "Cooldown (minutes)",
+    "risk.autoLossLimitsEnabled": "Auto Loss Stops",
     "risk.maxConsecutiveLosses": "Max Consecutive Losses",
     "ai.enabled": "AI Enabled",
     "ai.modelName": "Model Name",

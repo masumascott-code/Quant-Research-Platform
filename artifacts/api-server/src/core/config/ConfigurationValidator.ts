@@ -87,6 +87,7 @@ type ConfigPath =
   | "risk.maxAccountRiskPercent"
   | "risk.maxSectorExposurePercent"
   | "risk.maxCoinExposurePercent"
+  | "risk.autoLossLimitsEnabled"
   | "risk.killSwitch"
   | "paperTrading.defaultEquity"
   | "paperTrading.defaultLeverage"
@@ -234,6 +235,7 @@ const CONFIG_VALUE_KINDS: Record<ConfigPath, ValueKind> = {
   "risk.maxAccountRiskPercent": "number",
   "risk.maxSectorExposurePercent": "number",
   "risk.maxCoinExposurePercent": "number",
+  "risk.autoLossLimitsEnabled": "boolean",
   "risk.killSwitch": "boolean",
   "paperTrading.defaultEquity": "number",
   "paperTrading.defaultLeverage": "number",
@@ -305,6 +307,7 @@ export const LEGACY_CONFIG_ALIASES: Record<string, ConfigPath> = {
   max_account_risk: "risk.maxAccountRiskPercent",
   max_sector_exposure: "risk.maxSectorExposurePercent",
   max_coin_exposure: "risk.maxCoinExposurePercent",
+  auto_loss_limits_enabled: "risk.autoLossLimitsEnabled",
   rr_ratio: "signal.minRrRatio",
   kill_switch: "risk.killSwitch",
   emergency_stop: "risk.killSwitch",

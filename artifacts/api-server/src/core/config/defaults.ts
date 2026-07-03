@@ -91,6 +91,7 @@ export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
     maxAccountRiskPercent: 100,
     maxSectorExposurePercent: 100,
     maxCoinExposurePercent: 100,
+    autoLossLimitsEnabled: false,
     killSwitch: false,
   },
   paperTrading: {

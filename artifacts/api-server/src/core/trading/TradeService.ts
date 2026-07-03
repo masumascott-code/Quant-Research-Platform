@@ -144,27 +144,34 @@ export class TradeService {
   }
 
   async processPriceTick(trade: PaperTradeRecord, markPrice: number): Promise<PaperTradeRecord | null> {
-    const entry = Number(trade.entryPrice);
-    const currentStop = Number(trade.currentSl ?? trade.stopLoss);
-    const tp1 = Number(trade.tp1);
-    const tp2 = Number(trade.tp2);
-    const tp3 = Number(trade.tp3);
-    const isLong = trade.direction === "LONG";
+    const trackedTrade = await this.recordExcursion(trade, markPrice);
+    const entry = Number(trackedTrade.entryPrice);
+    const currentStop = Number(trackedTrade.currentSl ?? trackedTrade.stopLoss);
+    const tp1 = Number(trackedTrade.tp1);
+    const tp2 = Number(trackedTrade.tp2);
+    const tp3 = Number(trackedTrade.tp3);
+    const isLong = trackedTrade.direction === "LONG";
 
     const slHit = isLong ? markPrice <= currentStop : markPrice >= currentStop;
     if (slHit) {
-      logger.info({ tradeId: trade.tradeId, symbol: trade.symbol, markPrice, sl: currentStop }, "SL hit - auto-closing");
-      return await this.closeTrade(trade, {
+      const protectedResult = this.protectedStopResult(trackedTrade);
+      const exitReason = protectedResult === "BREAKEVEN"
+        ? "Protected stop hit after TP1 (break-even)"
+        : protectedResult === "WIN"
+          ? "Protected stop hit after TP2 trail"
+          : "Stop-loss hit (auto-close)";
+      logger.info({ tradeId: trackedTrade.tradeId, symbol: trackedTrade.symbol, markPrice, sl: currentStop, protectedResult }, "SL hit - auto-closing");
+      return await this.closeTrade(trackedTrade, {
         exitPrice: markPrice,
-        exitReason: "Stop-loss hit (auto-close)",
+        exitReason,
         trigger: "STOP_LOSS",
-        forceResult: "LOSS",
+        forceResult: protectedResult,
       });
     }
 
-    const tp3Hit = !trade.tp3Hit && (isLong ? markPrice >= tp3 : markPrice <= tp3);
+    const tp3Hit = !trackedTrade.tp3Hit && (isLong ? markPrice >= tp3 : markPrice <= tp3);
     if (tp3Hit) {
-      const tp3Trade = await this.markTp3Hit(trade, markPrice);
+      const tp3Trade = await this.markTp3Hit(trackedTrade, markPrice);
       return await this.closeTrade(tp3Trade, {
         exitPrice: markPrice,
         exitReason: "TP3 target reached (auto-close)",
@@ -173,17 +180,43 @@ export class TradeService {
       });
     }
 
-    const tp2Newly = !trade.tp2Hit && (isLong ? markPrice >= tp2 : markPrice <= tp2);
+    const tp2Newly = !trackedTrade.tp2Hit && (isLong ? markPrice >= tp2 : markPrice <= tp2);
     if (tp2Newly) {
-      await this.markTp2Hit(trade, markPrice, tp1);
+      await this.markTp2Hit(trackedTrade, markPrice, tp1);
     }
 
-    const tp1Newly = !trade.tp1Hit && (isLong ? markPrice >= tp1 : markPrice <= tp1);
+    const tp1Newly = !trackedTrade.tp1Hit && (isLong ? markPrice >= tp1 : markPrice <= tp1);
     if (tp1Newly && !tp2Newly) {
-      await this.markTp1Hit(trade, markPrice, entry);
+      await this.markTp1Hit(trackedTrade, markPrice, entry);
     }
 
     return null;
+  }
+
+  private async recordExcursion(trade: PaperTradeRecord, markPrice: number): Promise<PaperTradeRecord> {
+    const entry = Number(trade.entryPrice);
+    if (!Number.isFinite(entry) || entry <= 0 || !Number.isFinite(markPrice) || markPrice <= 0) {
+      return trade;
+    }
+
+    const movePercent = trade.direction === "LONG"
+      ? ((markPrice - entry) / entry) * 100
+      : ((entry - markPrice) / entry) * 100;
+    const maxProfit = Math.max(Number(trade.maxProfit ?? 0), movePercent);
+    const maxDrawdown = Math.max(Number(trade.maxDrawdown ?? 0), -movePercent);
+
+    const values: Partial<PaperTradeRecord> = {};
+    if (maxProfit !== Number(trade.maxProfit ?? 0)) values.maxProfit = String(maxProfit);
+    if (maxDrawdown !== Number(trade.maxDrawdown ?? 0)) values.maxDrawdown = String(maxDrawdown);
+    if (Object.keys(values).length === 0) return trade;
+
+    return await this.repository.updateById(trade.id, values);
+  }
+
+  private protectedStopResult(trade: PaperTradeRecord): TradeResult | undefined {
+    if (trade.tp2Hit) return "WIN";
+    if (trade.tp1Hit) return "BREAKEVEN";
+    return undefined;
   }
 
   private async markTp1Hit(trade: PaperTradeRecord, markPrice: number, newStop: number): Promise<PaperTradeRecord> {

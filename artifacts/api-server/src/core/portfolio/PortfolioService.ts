@@ -34,7 +34,7 @@ export class PortfolioService {
     }
 
     const dailyLossPercent = this.riskCalculator.dailyLossPercent(account.equity, summary.dailyPnl);
-    if (dailyLossPercent >= config.risk.dailyDrawdownLimitPercent) {
+    if (config.risk.autoLossLimitsEnabled && dailyLossPercent >= config.risk.dailyDrawdownLimitPercent) {
       return this.reject(
         `Maximum daily loss exceeded (${dailyLossPercent.toFixed(2)}% >= ${config.risk.dailyDrawdownLimitPercent}%)`,
         account,
@@ -43,7 +43,7 @@ export class PortfolioService {
     }
 
     const drawdownPercent = this.riskCalculator.drawdownPercent(config.paperTrading.defaultEquity, account.equity);
-    if (drawdownPercent >= config.risk.maxDrawdownPercent) {
+    if (config.risk.autoLossLimitsEnabled && drawdownPercent >= config.risk.maxDrawdownPercent) {
       return this.reject(
         `Maximum drawdown exceeded (${drawdownPercent.toFixed(2)}% >= ${config.risk.maxDrawdownPercent}%)`,
         account,
