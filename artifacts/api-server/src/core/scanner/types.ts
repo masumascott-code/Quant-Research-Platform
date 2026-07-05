@@ -1,5 +1,5 @@
 import type { MarketCandle, MarketContext } from "../market";
-import type { ScannerDecisionRuntimeConfig } from "../config";
+import type { ScannerDecisionRuntimeConfig, ScannerMode } from "../config";
 
 export interface TechnicalSignalInput {
   score: number;
@@ -14,6 +14,14 @@ export interface TechnicalSignalInput {
   tp3: number;
   rrRatio: number;
   reason: string;
+  trendScore?: number;
+  emaScore?: number;
+  volumeScore?: number;
+  rvolScore?: number;
+  breakoutScore?: number;
+  retestScore?: number;
+  structureScore?: number;
+  momentumScore?: number;
 }
 
 export interface ScannerCandidateInput {
@@ -21,6 +29,7 @@ export interface ScannerCandidateInput {
   direction: "LONG" | "SHORT";
   candles: MarketCandle[];
   technicalSignal: TechnicalSignalInput;
+  shortProtection?: ShortProtectionDiagnostic;
 }
 
 export interface ScoreBreakdown {
@@ -47,6 +56,8 @@ export interface ScoreBreakdown {
 }
 
 export type ScannerSignalGrade = "A+" | "A" | "B" | "C" | "Rejected";
+export type ScannerTradeGrade = "A+" | "A" | "B" | "C";
+export type ScannerScoreDecision = "TRADE_ELIGIBLE" | "WATCHLIST" | "REJECTED";
 
 export interface ScannerExplanation {
   whySelected: string[];
@@ -74,10 +85,44 @@ export interface MarketFilterResult {
   riskSummary: string[];
 }
 
+export interface ScannerComponentScores {
+  trendScore?: number;
+  emaAlignmentScore?: number;
+  volumeScore?: number;
+  rvolScore?: number;
+  breakoutScore?: number;
+  retestScore?: number;
+  structureScore?: number;
+  momentumScore?: number;
+  marketRegimeScore?: number;
+  liquidityScore?: number;
+  volatilityScore?: number;
+  sessionScore?: number;
+  riskRewardScore?: number;
+}
+
+export interface ShortProtectionDiagnostic {
+  priceChangePercent: number | null;
+  distanceFromEMA20: number | null;
+  distanceFromEMA50: number | null;
+  isShortOverextended: boolean;
+  hasBearishRetest: boolean;
+  marketRegime: string | null;
+  btcTrendBias: string | null;
+  shortProtectionWouldBlock: boolean;
+  shortProtectionReasons: string[];
+  diagnosticOnly: boolean;
+}
+
 export interface ScannerDecisionResult {
   accepted: boolean;
+  scannerMode: ScannerMode;
   finalScore: number;
+  technicalScore: number;
   signalGrade: ScannerSignalGrade;
+  tradeGrade: ScannerTradeGrade;
+  scoreDecision: ScannerScoreDecision;
+  scoreDecisionReason: string;
   strategy: string;
   marketRegime: string;
   confidence: number;
@@ -86,6 +131,11 @@ export interface ScannerDecisionResult {
   riskSummary: string[];
   context: MarketContext;
   scoreBreakdown: ScoreBreakdown;
+  componentScores: ScannerComponentScores;
+  rejectionStage: string | null;
+  rejectionReason: string | null;
+  blockedReason: string | null;
+  shortProtection?: ShortProtectionDiagnostic;
   explanation: ScannerExplanation;
 }
 

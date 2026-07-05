@@ -21,10 +21,32 @@ type ScannerDiagnosticDecision = {
   id: number;
   symbol: string;
   direction: string;
+  source?: string;
+  scannerType?: string;
+  badge?: string | null;
+  strategyLabel?: string | null;
+  smcScore?: number | null;
   decision: "ACCEPTED" | "REJECTED" | "SKIPPED" | string;
   strategy: string;
   finalScore: number;
   technicalScore: number;
+  componentScores?: Record<string, number | null | undefined> | null;
+  rejectionStage?: string | null;
+  rejectionReason?: string | null;
+  blockedReason?: string | null;
+  shortProtectionWouldBlock?: boolean;
+  shortProtectionReasons?: string[];
+  htfBias?: string | null;
+  liquiditySweep?: string | null;
+  structure?: string | null;
+  fvg?: string | null;
+  orderBlock?: string | null;
+  premiumDiscount?: string | null;
+  fibonacci?: string | null;
+  riskReward?: string | null;
+  paperTradeOpened?: boolean;
+  paperTradeId?: string | null;
+  paperTradeBlockedReason?: string | null;
   confidence: number;
   marketRegime: string;
   opportunityRank: number | null;
@@ -76,6 +98,56 @@ type ScannerDiagnostics = {
   recentSnapshots?: ScannerDiagnosticSnapshot[];
 };
 
+type ScannerDiagnosticsSummary = {
+  diagnosticsAvailable?: boolean;
+  totalDiagnostics: number;
+  acceptedCount: number;
+  rejectedCount: number;
+  skippedCount: number;
+  averageTechnicalScore: number;
+  averageFinalScore: number;
+  shortWouldBlockCount: number;
+  topShortProtectionReasons: Array<{ reason: string; count: number }>;
+  averageScoreByDirection: {
+    LONG: { technicalScore: number; finalScore: number };
+    SHORT: { technicalScore: number; finalScore: number };
+  };
+  acceptedByDirection: { LONG: number; SHORT: number };
+  rejectedByDirection: { LONG: number; SHORT: number };
+};
+
+type DirectionPerformanceSummary = {
+  closedLongTradeCount: number;
+  closedShortTradeCount: number;
+  longWinRate: number;
+  shortWinRate: number;
+  averageLongPnl: number;
+  averageShortPnl: number;
+  averageLongScore: number;
+  averageShortScore: number;
+  averageLongDurationMinutes: number;
+  averageShortDurationMinutes: number;
+  bestSymbols: Array<{ symbol: string; direction: string; totalPnl: number; count: number }>;
+  worstSymbols: Array<{ symbol: string; direction: string; totalPnl: number; count: number }>;
+};
+
+type ScannerSourceSummary = {
+  closedTradeCount: number;
+  winRate: number;
+  totalPnl: number;
+  averagePnl: number;
+  averageScore: number;
+  longWinRate?: number;
+  shortWinRate?: number;
+  bestSymbols?: Array<{ symbol: string; direction: string; totalPnl: number; count: number }>;
+  worstSymbols?: Array<{ symbol: string; direction: string; totalPnl: number; count: number }>;
+};
+
+type ScannerComparisonSummary = {
+  technical: ScannerSourceSummary;
+  smc: ScannerSourceSummary;
+};
+
 export default function Dashboard() {
   const { data: dashboard, isLoading, isError: dashboardError, error: dashboardQueryError } = useGetScannerDashboard({
     query: {
@@ -101,6 +173,12 @@ export default function Dashboard() {
   const livePrices = useLivePrices();
   const scannerAuthError = isUnauthorizedError(dashboardQueryError) || isUnauthorizedError(scannerStatusQueryError);
   const scannerUnavailable = dashboardError || scannerStatusError;
+  const scannerLimits = scannerStatus as typeof scannerStatus & {
+    maxDailyTrades?: number;
+    maxWeeklyTrades?: number;
+  };
+  const maxDailyTrades = scannerLimits?.maxDailyTrades ?? 5;
+  const maxWeeklyTrades = scannerLimits?.maxWeeklyTrades ?? 15;
   const scannerStatusLabel = scannerAuthError
     ? "Authentication Required"
     : scannerUnavailable
@@ -197,24 +275,24 @@ export default function Dashboard() {
             <div className="pt-2 border-t border-border">
               <div className="flex justify-between font-mono text-xs text-muted-foreground">
                 <span>Today's Trades</span>
-                <span>{scannerStatus?.dailyTrades ?? 0} / 5</span>
+                <span>{scannerStatus?.dailyTrades ?? 0} / {maxDailyTrades}</span>
               </div>
               <div className="mt-1 h-1.5 bg-muted rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary rounded-full transition-all"
-                  style={{ width: `${Math.min(((scannerStatus?.dailyTrades ?? 0) / 5) * 100, 100)}%` }}
+                  style={{ width: `${Math.min(((scannerStatus?.dailyTrades ?? 0) / maxDailyTrades) * 100, 100)}%` }}
                 />
               </div>
             </div>
             <div>
               <div className="flex justify-between font-mono text-xs text-muted-foreground">
                 <span>Weekly Trades</span>
-                <span>{scannerStatus?.weeklyTrades ?? 0} / 15</span>
+                <span>{scannerStatus?.weeklyTrades ?? 0} / {maxWeeklyTrades}</span>
               </div>
               <div className="mt-1 h-1.5 bg-muted rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary rounded-full transition-all"
-                  style={{ width: `${Math.min(((scannerStatus?.weeklyTrades ?? 0) / 15) * 100, 100)}%` }}
+                  style={{ width: `${Math.min(((scannerStatus?.weeklyTrades ?? 0) / maxWeeklyTrades) * 100, 100)}%` }}
                 />
               </div>
             </div>
@@ -222,7 +300,9 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      <StabilizationSummaryPanel />
       <ScannerDiagnosticsPanel />
+      <SmcDiagnosticsPanel />
     </div>
   );
 }
@@ -266,6 +346,7 @@ function LivePositionCard({ trade, livePrices }: { trade: any; livePrices: Recor
           <Badge variant="outline" className={`text-xs font-mono ${trade.direction === "LONG" ? "text-success border-success/30" : "text-destructive border-destructive/30"}`}>
             {trade.direction}
           </Badge>
+          <SourceBadge item={trade} />
           <span className="text-xs font-mono text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
             {trade.signalGrade}
           </span>
@@ -335,6 +416,75 @@ function LivePositionCard({ trade, livePrices }: { trade: any; livePrices: Recor
   );
 }
 
+function SmcDiagnosticsPanel() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["smc-diagnostics", { limit: 12 }],
+    queryFn: () => apiFetch<{ diagnosticsAvailable: boolean; recentDecisions: ScannerDiagnosticDecision[] }>("/api/scanner/smc/diagnostics?limit=12"),
+    refetchInterval: 10000,
+  });
+
+  return (
+    <Card className="border-border bg-card/50">
+      <CardHeader className="pb-3 border-b border-border/50">
+        <CardTitle className="text-sm font-mono text-muted-foreground uppercase flex items-center gap-2">
+          <Radar className="h-4 w-4 text-cyan-300" />
+          SMC Diagnostics
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        {isError ? (
+          <div className="flex h-[180px] items-center justify-center font-mono text-sm text-muted-foreground">SMC DIAGNOSTICS UNAVAILABLE</div>
+        ) : isLoading ? (
+          <div className="grid gap-px bg-border/60 md:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-40 rounded-none" />)}
+          </div>
+        ) : !data?.recentDecisions.length ? (
+          <div className="flex h-[180px] items-center justify-center font-mono text-sm text-muted-foreground">NO SMC DECISIONS YET</div>
+        ) : (
+          <div className="grid gap-px bg-border/60 md:grid-cols-3">
+            {data.recentDecisions.slice(0, 6).map((decision) => (
+              <div key={decision.id} className="bg-card p-3 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="font-mono text-sm font-bold">{decision.symbol}</div>
+                    <div className={decision.direction === "LONG" ? "font-mono text-success" : "font-mono text-destructive"}>{decision.direction}</div>
+                  </div>
+                  <Badge variant="outline" className={decision.decision === "ACCEPTED" ? "border-success/40 text-success" : decision.decision === "SKIPPED" ? "border-yellow-500/40 text-yellow-400" : "text-muted-foreground"}>
+                    {decision.decision}
+                  </Badge>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-muted-foreground">
+                  <span>SMC Score</span><span className="text-right text-foreground">{decision.smcScore ?? decision.finalScore}</span>
+                  <span>HTF</span><span className="text-right text-foreground">{decision.htfBias ?? "---"}</span>
+                  <span>Sweep</span><span className="truncate text-right text-foreground">{decision.liquiditySweep ?? "---"}</span>
+                  <span>Structure</span><span className="truncate text-right text-foreground">{decision.structure ?? "---"}</span>
+                  <span>FVG</span><span className="truncate text-right text-foreground">{decision.fvg ?? "---"}</span>
+                  <span>OB</span><span className="truncate text-right text-foreground">{decision.orderBlock ?? "---"}</span>
+                  <span>Fib/PD</span><span className="truncate text-right text-foreground">{decision.fibonacci ?? decision.premiumDiscount ?? "---"}</span>
+                  <span>RR</span><span className="text-right text-foreground">{decision.riskReward ?? "---"}</span>
+                </div>
+                <div className="mt-2 rounded border border-border bg-muted/20 p-2 font-mono text-[10px] text-muted-foreground">
+                  Paper trade: {decision.paperTradeOpened ? `OPENED ${decision.paperTradeId ?? ""}` : decision.paperTradeBlockedReason ?? "not opened"}
+                </div>
+                <p className="mt-2 line-clamp-2 text-muted-foreground">{decision.rejectionReason ?? decision.reasons?.[0] ?? decision.strategyLabel ?? "SMC decision"}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SourceBadge({ item }: { item: any }) {
+  const isSmc = item.source === "SMC" || item.scannerType === "SMC_SCANNER";
+  return (
+    <Badge variant="outline" className={`font-mono text-[10px] ${isSmc ? "border-cyan-400/40 bg-cyan-400/10 text-cyan-300" : "border-muted-foreground/30 text-muted-foreground"}`}>
+      {isSmc ? item.badge ?? "SMC" : "TECH"}
+    </Badge>
+  );
+}
+
 function ScannerDiagnosticsPanel() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["scanner-diagnostics", { limit: 24 }],
@@ -352,6 +502,9 @@ function ScannerDiagnosticsPanel() {
   };
   const showScanActivity = !isLoading && (data?.today.totalDecisions ?? 0) === 0 && !!latestSnapshot;
   const latestReason = latestDecision?.reasons[0] ?? latestDecision?.riskSummary[0] ?? "---";
+  const latestDisplayReason = latestDecision?.blockedReason
+    ?? latestDecision?.rejectionReason
+    ?? latestReason;
 
   useEffect(() => {
     if (data?.nextScanIn == null) {
@@ -482,11 +635,37 @@ function ScannerDiagnosticsPanel() {
                       <span className="text-right">{showScanActivity ? `${formatScore(latestSnapshot?.priceChangePercent)}%` : formatScore(latestDecision?.confidence)}</span>
                       <span className="text-muted-foreground">{showScanActivity ? "Rank" : "Risk Grade"}</span>
                       <span className="text-right">{showScanActivity ? `Rank #${latestSnapshot?.rank ?? "---"}` : latestDecision?.riskGrade ?? "---"}</span>
+                      {!showScanActivity && (
+                        <>
+                          <span className="text-muted-foreground">Tech / Final</span>
+                          <span className="text-right">{formatScore(latestDecision?.technicalScore)} / {formatScore(latestDecision?.finalScore)}</span>
+                          <span className="text-muted-foreground">Stage</span>
+                          <span className="text-right">{latestDecision?.rejectionStage ?? "---"}</span>
+                        </>
+                      )}
                     </div>
+                    {!showScanActivity && latestDecision?.componentScores && (
+                      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-border pt-3 text-xs font-mono">
+                        {Object.entries(latestDecision.componentScores)
+                          .filter(([, value]) => typeof value === "number" && Number.isFinite(value))
+                          .slice(0, 8)
+                          .map(([key, value]) => (
+                            <div key={key} className="flex justify-between gap-2">
+                              <span className="truncate text-muted-foreground">{scoreLabel(key)}</span>
+                              <span>{formatScore(value ?? undefined)}</span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                    {!showScanActivity && latestDecision?.shortProtectionWouldBlock && (
+                      <div className="mt-3 rounded border border-yellow-500/30 bg-yellow-500/10 p-2 text-xs text-yellow-300">
+                        SHORT protection would block: {latestDecision.shortProtectionReasons?.[0] ?? "review required"}
+                      </div>
+                    )}
                     <p className="mt-3 text-xs text-muted-foreground leading-relaxed">
                       {data?.message ?? (showScanActivity && latestSnapshot
                         ? `Latest market scan snapshot recorded ${data?.scanActivity?.snapshotsLast10m ?? 0} snapshots in the last 10 minutes.`
-                        : latestReason)}
+                        : latestDisplayReason)}
                     </p>
                   </div>
                 </div>
@@ -512,6 +691,268 @@ function ScannerDiagnosticsPanel() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function StabilizationSummaryPanel() {
+  const { data: diagnosticsSummary, isLoading: diagnosticsLoading } = useQuery({
+    queryKey: ["scanner-diagnostics-summary", { hours: 24 }],
+    queryFn: () => apiFetch<ScannerDiagnosticsSummary>("/api/scanner/diagnostics/summary?hours=24"),
+    refetchInterval: 15000,
+  });
+
+  const { data: directionPerformance, isLoading: performanceLoading } = useQuery({
+    queryKey: ["direction-performance", { days: 90 }],
+    queryFn: () => apiFetch<DirectionPerformanceSummary>("/api/analytics/direction-performance?days=90"),
+    refetchInterval: 30000,
+  });
+
+  const { data: scannerComparison, isLoading: comparisonLoading } = useQuery({
+    queryKey: ["scanner-comparison"],
+    queryFn: () => apiFetch<ScannerComparisonSummary>("/api/analytics/scanner-comparison"),
+    refetchInterval: 30000,
+  });
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <Card className="border-border bg-card/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-mono text-muted-foreground uppercase flex items-center gap-2">
+            <Radar className="h-4 w-4 text-primary" />
+            Diagnostics Summary
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <MiniSummaryStat label="Total" value={diagnosticsSummary?.totalDiagnostics.toString() ?? "---"} loading={diagnosticsLoading} />
+            <MiniSummaryStat label="Accepted" value={diagnosticsSummary?.acceptedCount.toString() ?? "---"} loading={diagnosticsLoading} valueClassName="text-success" />
+            <MiniSummaryStat label="Rejected" value={diagnosticsSummary?.rejectedCount.toString() ?? "---"} loading={diagnosticsLoading} valueClassName="text-destructive" />
+            <MiniSummaryStat label="Short Would Block" value={diagnosticsSummary?.shortWouldBlockCount.toString() ?? "---"} loading={diagnosticsLoading} valueClassName="text-yellow-400" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+            <DirectionScoreReadout label="LONG" scores={diagnosticsSummary?.averageScoreByDirection.LONG} accepted={diagnosticsSummary?.acceptedByDirection.LONG} rejected={diagnosticsSummary?.rejectedByDirection.LONG} />
+            <DirectionScoreReadout label="SHORT" scores={diagnosticsSummary?.averageScoreByDirection.SHORT} accepted={diagnosticsSummary?.acceptedByDirection.SHORT} rejected={diagnosticsSummary?.rejectedByDirection.SHORT} />
+          </div>
+          <div>
+            <div className="font-mono text-xs text-muted-foreground uppercase">Top Short Protection Reasons</div>
+            <div className="mt-2 space-y-2">
+              {diagnosticsSummary?.topShortProtectionReasons.length ? (
+                diagnosticsSummary.topShortProtectionReasons.slice(0, 4).map((item) => (
+                  <div key={item.reason} className="flex items-center justify-between gap-3 text-xs">
+                    <span className="line-clamp-1 text-muted-foreground">{item.reason}</span>
+                    <span className="font-mono text-yellow-400">{item.count}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-xs text-muted-foreground">No SHORT protection flags in this window.</div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border bg-card/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-mono text-muted-foreground uppercase flex items-center gap-2">
+            <Target className="h-4 w-4 text-primary" />
+            LONG vs SHORT Performance
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <PerformanceDirectionCard
+              label="LONG"
+              count={directionPerformance?.closedLongTradeCount}
+              winRate={directionPerformance?.longWinRate}
+              averagePnl={directionPerformance?.averageLongPnl}
+              averageScore={directionPerformance?.averageLongScore}
+              averageDuration={directionPerformance?.averageLongDurationMinutes}
+              loading={performanceLoading}
+            />
+            <PerformanceDirectionCard
+              label="SHORT"
+              count={directionPerformance?.closedShortTradeCount}
+              winRate={directionPerformance?.shortWinRate}
+              averagePnl={directionPerformance?.averageShortPnl}
+              averageScore={directionPerformance?.averageShortScore}
+              averageDuration={directionPerformance?.averageShortDurationMinutes}
+              loading={performanceLoading}
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ScannerSourceCard label="Technical Scanner" summary={scannerComparison?.technical} loading={comparisonLoading} />
+            <ScannerSourceCard label="SMC Scanner" summary={scannerComparison?.smc} loading={comparisonLoading} accentClassName="text-cyan-300" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <SymbolList title="SMC Best Symbols" items={scannerComparison?.smc.bestSymbols ?? []} />
+            <SymbolList title="SMC Worst Symbols" items={scannerComparison?.smc.worstSymbols ?? []} />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function ScannerSourceCard({
+  label,
+  summary,
+  loading,
+  accentClassName = "text-primary",
+}: {
+  label: string;
+  summary?: ScannerSourceSummary;
+  loading: boolean;
+  accentClassName?: string;
+}) {
+  return (
+    <div className="rounded-md border border-border bg-muted/20 p-3 font-mono text-xs">
+      <div className={accentClassName}>{label}</div>
+      {loading ? (
+        <Skeleton className="mt-3 h-20 w-full" />
+      ) : (
+        <div className="mt-2 grid grid-cols-2 gap-2 text-muted-foreground">
+          <span>Closed</span>
+          <span className="text-right text-foreground">{summary?.closedTradeCount ?? 0}</span>
+          <span>Win Rate</span>
+          <span className="text-right text-foreground">{formatPercent(summary?.winRate)}</span>
+          <span>Total PnL</span>
+          <span className={`text-right ${(summary?.totalPnl ?? 0) > 0 ? "text-success" : (summary?.totalPnl ?? 0) < 0 ? "text-destructive" : "text-foreground"}`}>
+            {formatCurrencyValue(summary?.totalPnl)}
+          </span>
+          <span>Avg PnL</span>
+          <span className="text-right text-foreground">{formatCurrencyValue(summary?.averagePnl)}</span>
+          {summary?.longWinRate != null && (
+            <>
+              <span>LONG WR</span>
+              <span className="text-right text-success">{formatPercent(summary.longWinRate)}</span>
+              <span>SHORT WR</span>
+              <span className="text-right text-destructive">{formatPercent(summary.shortWinRate)}</span>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MiniSummaryStat({
+  label,
+  value,
+  valueClassName = "",
+  loading,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+  loading: boolean;
+}) {
+  return (
+    <div className="rounded-md border border-border bg-muted/20 p-3">
+      <div className="text-[10px] uppercase text-muted-foreground font-mono">{label}</div>
+      {loading ? (
+        <Skeleton className="mt-2 h-5 w-14" />
+      ) : (
+        <div className={`mt-1 font-mono text-lg font-bold ${valueClassName}`}>{value}</div>
+      )}
+    </div>
+  );
+}
+
+function DirectionScoreReadout({
+  label,
+  scores,
+  accepted,
+  rejected,
+}: {
+  label: "LONG" | "SHORT";
+  scores?: { technicalScore: number; finalScore: number };
+  accepted?: number;
+  rejected?: number;
+}) {
+  return (
+    <div className="rounded-md border border-border bg-muted/20 p-3">
+      <div className={label === "LONG" ? "text-success" : "text-destructive"}>{label}</div>
+      <div className="mt-2 grid grid-cols-2 gap-2 text-muted-foreground">
+        <span>Tech</span>
+        <span className="text-right text-foreground">{formatScore(scores?.technicalScore)}</span>
+        <span>Final</span>
+        <span className="text-right text-foreground">{formatScore(scores?.finalScore)}</span>
+        <span>Accepted</span>
+        <span className="text-right text-success">{accepted ?? 0}</span>
+        <span>Rejected</span>
+        <span className="text-right text-destructive">{rejected ?? 0}</span>
+      </div>
+    </div>
+  );
+}
+
+function PerformanceDirectionCard({
+  label,
+  count,
+  winRate,
+  averagePnl,
+  averageScore,
+  averageDuration,
+  loading,
+}: {
+  label: "LONG" | "SHORT";
+  count?: number;
+  winRate?: number;
+  averagePnl?: number;
+  averageScore?: number;
+  averageDuration?: number;
+  loading: boolean;
+}) {
+  return (
+    <div className="rounded-md border border-border bg-muted/20 p-3 font-mono text-xs">
+      <div className={label === "LONG" ? "text-success" : "text-destructive"}>{label}</div>
+      {loading ? (
+        <Skeleton className="mt-3 h-20 w-full" />
+      ) : (
+        <div className="mt-2 grid grid-cols-2 gap-2 text-muted-foreground">
+          <span>Closed</span>
+          <span className="text-right text-foreground">{count ?? 0}</span>
+          <span>Win Rate</span>
+          <span className="text-right text-foreground">{formatPercent(winRate)}</span>
+          <span>Avg PnL</span>
+          <span className={`text-right ${(averagePnl ?? 0) > 0 ? "text-success" : (averagePnl ?? 0) < 0 ? "text-destructive" : "text-foreground"}`}>
+            {formatCurrencyValue(averagePnl)}
+          </span>
+          <span>Avg Score</span>
+          <span className="text-right text-foreground">{formatScore(averageScore)}</span>
+          <span>Avg Duration</span>
+          <span className="text-right text-foreground">{formatDuration(averageDuration)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SymbolList({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<{ symbol: string; direction: string; totalPnl: number; count: number }>;
+}) {
+  return (
+    <div>
+      <div className="font-mono text-xs text-muted-foreground uppercase">{title}</div>
+      <div className="mt-2 space-y-2">
+        {items.length ? (
+          items.slice(0, 4).map((item) => (
+            <div key={`${title}-${item.direction}-${item.symbol}`} className="flex items-center justify-between gap-3">
+              <span className="font-mono text-xs text-muted-foreground">
+                {item.symbol} <span className={item.direction === "LONG" ? "text-success" : "text-destructive"}>{item.direction}</span>
+              </span>
+              <span className="font-mono text-xs text-foreground">{formatCurrencyValue(item.totalPnl)} / {item.count}</span>
+            </div>
+          ))
+        ) : (
+          <div className="text-xs text-muted-foreground">No closed trades in this window.</div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -579,9 +1020,17 @@ function DecisionPartition({
               </div>
               <div className="mt-1 flex items-center justify-between gap-3 text-xs">
                 <span className="line-clamp-1 text-muted-foreground">
-                  {decision.reasons[0] ?? decision.riskSummary[0] ?? "---"}
+                  {decision.blockedReason ?? decision.rejectionReason ?? decision.reasons[0] ?? decision.riskSummary[0] ?? "---"}
                 </span>
                 <span className="font-mono text-foreground">{formatDecisionScore(decision)}</span>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] font-mono text-muted-foreground">
+                <span>TECH {formatScore(decision.technicalScore)}</span>
+                <span>FINAL {formatScore(decision.finalScore)}</span>
+                {decision.rejectionStage && <span>{decision.rejectionStage.toUpperCase()}</span>}
+                {decision.direction === "SHORT" && decision.shortProtectionWouldBlock && (
+                  <span className="text-yellow-400">SHORT WOULD BLOCK</span>
+                )}
               </div>
             </div>
           ))}
@@ -598,6 +1047,28 @@ function formatDecisionScore(decision?: Pick<ScannerDiagnosticDecision, "finalSc
 
 function formatScore(value?: number): string {
   return value == null || !Number.isFinite(value) ? "---" : value.toFixed(1);
+}
+
+function formatPercent(value?: number): string {
+  return value == null || !Number.isFinite(value) ? "---" : `${(value * 100).toFixed(1)}%`;
+}
+
+function formatCurrencyValue(value?: number): string {
+  if (value == null || !Number.isFinite(value)) return "---";
+  return `${value >= 0 ? "+" : ""}$${value.toFixed(2)}`;
+}
+
+function formatDuration(value?: number): string {
+  if (value == null || !Number.isFinite(value)) return "---";
+  if (value < 60) return `${value.toFixed(0)}m`;
+  return `${(value / 60).toFixed(1)}h`;
+}
+
+function scoreLabel(key: string): string {
+  return key
+    .replace(/Score$/, "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toUpperCase();
 }
 
 function formatPrice(value?: number): string {

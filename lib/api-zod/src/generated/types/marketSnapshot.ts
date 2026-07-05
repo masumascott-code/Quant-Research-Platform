@@ -5,6 +5,7 @@
  * Binance Futures Paper Trading Research Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { MarketSnapshotDecision } from './marketSnapshotDecision';
 
 export interface MarketSnapshot {
   id: number;
@@ -23,4 +24,5 @@ export interface MarketSnapshot {
   /** @nullable */
   trend?: string | null;
   scannedAt?: string;
+  latestDecision?: MarketSnapshotDecision | null;
 }

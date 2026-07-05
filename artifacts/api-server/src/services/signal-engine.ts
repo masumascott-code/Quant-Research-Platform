@@ -62,6 +62,32 @@ export interface SignalAnalysis {
   rvol: number;
 }
 
+export interface TechnicalComponentScores {
+  trendScore: number;
+  emaAlignmentScore: number;
+  volumeScore: number;
+  rvolScore: number;
+  breakoutScore: number;
+  retestScore: number;
+  structureScore: number;
+  momentumScore: number;
+}
+
+export interface TechnicalRejectionDiagnostic {
+  rejectionStage: string;
+  rejectionReason: string;
+  technicalScore: number;
+  componentScores: TechnicalComponentScores;
+  ema20: number;
+  ema50: number;
+  ema200: number;
+  atr14: number;
+  rvol: number;
+  hasRetest: boolean;
+  timeframeAlignment: string;
+  details: Record<string, unknown>;
+}
+
 // ── Indicator helpers ─────────────────────────────────────────────────────────
 
 function calcEMA(prices: number[], period: number): number[] {
@@ -578,5 +604,254 @@ export function analyzeForShort(
     trendScore, emaScore, volumeScore, rvolScore,
     breakoutScore, retestScore, structureScore, momentumScore,
     ema20, ema50, ema200, atr14, rvol,
+  };
+}
+
+export function diagnoseTechnicalSetup(
+  candles15m: CandleData[],
+  currentPrice: number,
+  volume24h: number,
+  direction: "LONG" | "SHORT",
+  mtf?: { m5: CandleData[]; h1: CandleData[]; m1: CandleData[] },
+  config = configService.getSync().signal
+): TechnicalRejectionDiagnostic {
+  const closes = candles15m.map(c => c.close);
+  const ema20arr = calcEMA(closes, config.emaFastPeriod);
+  const ema50arr = calcEMA(closes, config.emaSlowPeriod);
+  const ema200arr = calcEMA(closes, config.emaTrendPeriod);
+  const ema20 = ema20arr[ema20arr.length - 1] ?? 0;
+  const ema50 = ema50arr[ema50arr.length - 1] ?? 0;
+  const ema200 = ema200arr[ema200arr.length - 1] ?? 0;
+  const atr14 = calcATR(candles15m, config.atrPeriod);
+  const rvol = calcRVOL(candles15m, config.rvolLookback);
+
+  let trendScore = 0;
+  if (direction === "LONG") {
+    if (ema20 > ema50) trendScore += 8;
+    if (currentPrice > ema20) trendScore += 6;
+    if (currentPrice > ema50) trendScore += 4;
+    if (ema50 > ema200) trendScore += 2;
+  } else {
+    if (ema20 < ema50) trendScore += 8;
+    if (currentPrice < ema20) trendScore += 6;
+    if (currentPrice < ema50) trendScore += 4;
+    if (ema50 < ema200) trendScore += 2;
+  }
+
+  let emaAlignmentScore = 0;
+  if (direction === "LONG") {
+    if (ema20 > ema50 && ema50 > ema200) emaAlignmentScore += 6;
+    else if (ema20 > ema50) emaAlignmentScore += 3;
+    const emaDistance = ema50 > 0 ? (ema20 - ema50) / ema50 : 0;
+    if (emaDistance > 0.005 && emaDistance < 0.03) emaAlignmentScore += 4;
+    else if (emaDistance > 0 && emaDistance <= 0.005) emaAlignmentScore += 2;
+  } else {
+    if (ema20 < ema50 && ema50 < ema200) emaAlignmentScore += 6;
+    else if (ema20 < ema50) emaAlignmentScore += 3;
+    const emaDistance = ema50 > 0 ? (ema50 - ema20) / ema50 : 0;
+    if (emaDistance > 0.005 && emaDistance < 0.03) emaAlignmentScore += 4;
+    else if (emaDistance > 0 && emaDistance <= 0.005) emaAlignmentScore += 2;
+  }
+
+  let volumeScore = 0;
+  if (volume24h >= config.volumeScoreVeryHigh) volumeScore = 15;
+  else if (volume24h >= config.volumeScoreHigh) volumeScore = 12;
+  else if (volume24h >= config.volumeScoreMedium) volumeScore = 9;
+  else if (volume24h >= config.volumeScoreMin) volumeScore = 6;
+
+  let rvolScore = 0;
+  if (rvol >= config.rvolScoreExtreme) rvolScore = 15;
+  else if (rvol >= config.rvolScoreVeryHigh) rvolScore = 13;
+  else if (rvol >= config.rvolScoreHigh) rvolScore = 11;
+  else if (rvol >= config.rvolScoreMediumHigh) rvolScore = 9;
+  else if (rvol >= config.rvolScoreMin) rvolScore = 6;
+
+  let breakoutScore = 0;
+  let breakoutLevel = 0;
+  if (direction === "LONG") {
+    const breakout = detectBreakout(candles15m, ema20, config.breakoutLookback);
+    breakoutLevel = breakout.level;
+    if (breakout.detected) {
+      breakoutScore += 10;
+      if (!detectFakeBreakout(candles15m, breakout.level, "LONG", config)) breakoutScore += 5;
+    }
+  } else {
+    const breakdown = detectBreakdown(candles15m, ema20, config.breakoutLookback);
+    breakoutLevel = breakdown.level;
+    if (breakdown.detected) {
+      breakoutScore += 10;
+      if (!detectFakeBreakout(candles15m, breakdown.level, "SHORT", config)) breakoutScore += 5;
+    }
+  }
+
+  const hasRetest = direction === "LONG"
+    ? detectRetest(candles15m, ema20, config.retestTolerance) || detectRetest(candles15m, breakoutLevel, config.setupRetestTolerance)
+    : detectRetestShort(candles15m, ema20, config.retestTolerance) || detectRetestShort(candles15m, breakoutLevel, config.setupRetestTolerance);
+  const last = candles15m[candles15m.length - 1];
+  let retestScore = 0;
+  if (hasRetest) retestScore += 7;
+  if (last && direction === "LONG" && isBullishCandle(last, config.candleBodyRatio)) retestScore += 3;
+  if (last && direction === "SHORT" && isBearishCandle(last, config.candleBodyRatio)) retestScore += 3;
+
+  let structureScore = 0;
+  if (direction === "LONG") {
+    if (detectHigherHighHigherLow(candles15m, config.structureLookback)) structureScore += 10;
+    else if (last && candles15m[candles15m.length - 3] && last.close > candles15m[candles15m.length - 3].close) structureScore += 5;
+  } else {
+    if (detectLowerHighLowerLow(candles15m, config.structureLookback)) structureScore += 10;
+    else if (last && candles15m[candles15m.length - 3] && last.close < candles15m[candles15m.length - 3].close) structureScore += 5;
+  }
+
+  let momentumScore = 0;
+  if (direction === "LONG" && isBullishMomentum(candles15m, config.momentumCandles)) momentumScore += 3;
+  if (direction === "SHORT" && isBearishMomentum(candles15m, config.momentumCandles)) momentumScore += 3;
+  if (last) {
+    const lastBody = Math.abs(last.close - last.open);
+    const lastRange = last.high - last.low;
+    if (lastRange > 0 && lastBody / lastRange > 0.6) momentumScore += 2;
+  }
+
+  let tfBonus = 0;
+  let timeframeAlignment = "15m only";
+  let mtfFailure = false;
+  if (mtf && mtf.m5.length >= config.mtfMinCandles && mtf.h1.length >= config.mtfMinCandles) {
+    const tfResult = checkTimeframeAlignment(candles15m, mtf.h1, mtf.m5, direction, config);
+    timeframeAlignment = tfResult.summary;
+    mtfFailure = !tfResult.aligned;
+    tfBonus = tfResult.aligned ? tfResult.score * config.timeframeScoreMultiplier : 0;
+  }
+
+  const rawScore = trendScore + emaAlignmentScore + volumeScore + rvolScore + breakoutScore + retestScore + structureScore + momentumScore;
+  const technicalScore = Math.min(config.maxScore, rawScore + tfBonus);
+  const componentScores = {
+    trendScore,
+    emaAlignmentScore,
+    volumeScore,
+    rvolScore,
+    breakoutScore,
+    retestScore,
+    structureScore,
+    momentumScore,
+  };
+
+  if (mtfFailure) {
+    return {
+      rejectionStage: "MTF Alignment",
+      rejectionReason: "Multi-timeframe alignment failed",
+      technicalScore,
+      componentScores,
+      ema20,
+      ema50,
+      ema200,
+      atr14,
+      rvol,
+      hasRetest,
+      timeframeAlignment,
+      details: { minimumAlignedTimeframes: config.minTimeframeAlignment },
+    };
+  }
+
+  if (technicalScore < config.minAnalysisScore) {
+    return {
+      rejectionStage: "Technical Score",
+      rejectionReason: `Technical score below threshold (${technicalScore.toFixed(2)} < ${config.minAnalysisScore})`,
+      technicalScore,
+      componentScores,
+      ema20,
+      ema50,
+      ema200,
+      atr14,
+      rvol,
+      hasRetest,
+      timeframeAlignment,
+      details: { rawScore, tfBonus },
+    };
+  }
+
+  const swingLevel = direction === "LONG"
+    ? Math.min(...candles15m.slice(-config.swingLookback).map(c => c.low))
+    : Math.max(...candles15m.slice(-config.swingLookback).map(c => c.high));
+  const slCandidates = direction === "LONG"
+    ? [
+      swingLevel - atr14 * config.atrSwingBuffer,
+      ema20 - atr14 * config.atrEmaBuffer,
+      currentPrice - atr14 * config.atrMaxStopBuffer,
+    ].filter(s => s > 0 && s < currentPrice)
+    : [
+      swingLevel + atr14 * config.atrSwingBuffer,
+      ema20 + atr14 * config.atrEmaBuffer,
+      currentPrice + atr14 * config.atrMaxStopBuffer,
+    ].filter(s => s > currentPrice);
+
+  if (slCandidates.length === 0) {
+    return {
+      rejectionStage: "SL/Risk Validation",
+      rejectionReason: "No valid stop-loss candidate",
+      technicalScore,
+      componentScores,
+      ema20,
+      ema50,
+      ema200,
+      atr14,
+      rvol,
+      hasRetest,
+      timeframeAlignment,
+      details: { swingLevel },
+    };
+  }
+
+  const stopLoss = direction === "LONG" ? Math.min(...slCandidates) : Math.max(...slCandidates);
+  const risk = direction === "LONG" ? currentPrice - stopLoss : stopLoss - currentPrice;
+  if (risk <= 0 || risk / currentPrice > config.maxRiskPercent) {
+    return {
+      rejectionStage: "SL/Risk Validation",
+      rejectionReason: `Risk outside allowed range (${((risk / currentPrice) * 100).toFixed(2)}%)`,
+      technicalScore,
+      componentScores,
+      ema20,
+      ema50,
+      ema200,
+      atr14,
+      rvol,
+      hasRetest,
+      timeframeAlignment,
+      details: { stopLoss, risk, maxRiskPercent: config.maxRiskPercent },
+    };
+  }
+
+  const tp2 = direction === "LONG"
+    ? currentPrice + risk * config.tp2RiskMultiple
+    : currentPrice - risk * config.tp2RiskMultiple;
+  const rrRatio = direction === "LONG" ? (tp2 - currentPrice) / risk : (currentPrice - tp2) / risk;
+  if (rrRatio < config.minRrRatio) {
+    return {
+      rejectionStage: "RR Validation",
+      rejectionReason: `RR below minimum (${rrRatio.toFixed(2)} < ${config.minRrRatio})`,
+      technicalScore,
+      componentScores,
+      ema20,
+      ema50,
+      ema200,
+      atr14,
+      rvol,
+      hasRetest,
+      timeframeAlignment,
+      details: { rrRatio, minRrRatio: config.minRrRatio },
+    };
+  }
+
+  return {
+    rejectionStage: "Technical Filter",
+    rejectionReason: "No qualifying setup after technical checks",
+    technicalScore,
+    componentScores,
+    ema20,
+    ema50,
+    ema200,
+    atr14,
+    rvol,
+    hasRetest,
+    timeframeAlignment,
+    details: { rawScore, tfBonus },
   };
 }

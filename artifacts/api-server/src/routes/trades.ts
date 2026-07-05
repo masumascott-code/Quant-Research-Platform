@@ -14,7 +14,7 @@ function parseCloseBody(body: any): { exitPrice: number; exitReason: string } | 
 
 router.get("/", async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 200);
-  const { status, direction, result } = req.query;
+  const { status, direction, result, source, scannerType } = req.query;
 
   const conditions = [];
   if (status && ["open", "closed"].includes(status as string)) {
@@ -25,6 +25,12 @@ router.get("/", async (req, res) => {
   }
   if (result && ["WIN", "LOSS", "BREAKEVEN"].includes(result as string)) {
     conditions.push(eq(paperTradesTable.result, result as string));
+  }
+  if (source && ["TECHNICAL", "SMC"].includes(source as string)) {
+    conditions.push(eq(paperTradesTable.source, source as string));
+  }
+  if (scannerType && ["TECHNICAL_SCANNER", "SMC_SCANNER"].includes(scannerType as string)) {
+    conditions.push(eq(paperTradesTable.scannerType, scannerType as string));
   }
 
   const trades = await db
@@ -38,10 +44,19 @@ router.get("/", async (req, res) => {
 });
 
 router.get("/open", async (req, res) => {
+  const { source, scannerType } = req.query;
+  const conditions = [eq(paperTradesTable.status, "open")];
+  if (source && ["TECHNICAL", "SMC"].includes(source as string)) {
+    conditions.push(eq(paperTradesTable.source, source as string));
+  }
+  if (scannerType && ["TECHNICAL_SCANNER", "SMC_SCANNER"].includes(scannerType as string)) {
+    conditions.push(eq(paperTradesTable.scannerType, scannerType as string));
+  }
+
   const trades = await db
     .select()
     .from(paperTradesTable)
-    .where(eq(paperTradesTable.status, "open"))
+    .where(and(...conditions))
     .orderBy(desc(paperTradesTable.openedAt));
 
   res.json(trades.map(formatTrade));
@@ -106,6 +121,13 @@ function formatTrade(t: any) {
     tradeId: t.tradeId,
     symbol: t.symbol,
     direction: t.direction,
+    source: t.source ?? "TECHNICAL",
+    scannerType: t.scannerType ?? "TECHNICAL_SCANNER",
+    strategyType: t.strategyType ?? "TECHNICAL",
+    strategyLabel: t.strategyLabel,
+    badge: t.badge,
+    smcScore: t.smcScore ? Number(t.smcScore) : null,
+    smcDetails: t.smcDetails ?? null,
     entryPrice: Number(t.entryPrice),
     stopLoss: Number(t.stopLoss),
     currentSl: t.currentSl ? Number(t.currentSl) : null,

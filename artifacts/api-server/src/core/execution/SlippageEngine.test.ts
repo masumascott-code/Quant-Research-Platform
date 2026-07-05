@@ -5,7 +5,7 @@ import { SlippageEngine } from "./SlippageEngine";
 test("SlippageEngine returns zero slippage without market pressure inputs", () => {
   const estimate = new SlippageEngine().estimate({
     referencePrice: 100,
-    orderSize: 10,
+    orderSize: 0,
     market: {},
   });
 

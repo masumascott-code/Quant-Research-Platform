@@ -7,9 +7,13 @@
  */
 import type { GetSignalsDirection } from './getSignalsDirection';
 import type { GetSignalsStatus } from './getSignalsStatus';
+import type { ScannerType } from './scannerType';
+import type { SignalSource } from './signalSource';
 
 export type GetSignalsParams = {
 status?: GetSignalsStatus;
 direction?: GetSignalsDirection;
+source?: SignalSource;
+scannerType?: ScannerType;
 limit?: number;
 };

@@ -5,6 +5,7 @@
  * Binance Futures Paper Trading Research Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { PortfolioSummary } from './portfolioSummary';
 
 export interface ScannerDashboard {
   scannerRunning: boolean;
@@ -16,15 +17,7 @@ export interface ScannerDashboard {
   todayPnl: number;
   totalPnl: number;
   winRate: number;
-  portfolio?: {
-    currency: string;
-    equity: number;
-    availableBalance: number;
-    usedMargin: number;
-    freeMargin: number;
-    openExposure: number;
-    riskUsagePercent: number;
-  };
+  portfolio?: PortfolioSummary;
   /** @nullable */
   lastScanAt?: string | null;
 }

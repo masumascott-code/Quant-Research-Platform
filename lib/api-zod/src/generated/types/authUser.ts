@@ -8,6 +8,7 @@
 import type { AuthRole } from './authRole';
 
 export interface AuthUser {
+  userId?: number;
   username: string;
   role: AuthRole;
 }

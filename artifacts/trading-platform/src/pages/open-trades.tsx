@@ -1,4 +1,4 @@
-import { useGetOpenTrades, getGetOpenTradesQueryKey, useCloseTrade } from "@workspace/api-client-react";
+import { useGetTrades, getGetTradesQueryKey, getGetOpenTradesQueryKey, useCloseTrade } from "@workspace/api-client-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Briefcase, X, Shield, Zap } from "lucide-react";
@@ -13,9 +13,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useLivePrices } from "@/hooks/use-live-prices";
 
 export default function OpenTrades() {
-  const { data: trades, isLoading } = useGetOpenTrades({
+  const [source, setSource] = useState<"all" | "TECHNICAL" | "SMC">("all");
+  const tradeParams = {
+    status: "open" as const,
+    source: source !== "all" ? source : undefined,
+  };
+  const { data: trades, isLoading } = useGetTrades(tradeParams, {
     query: {
-      queryKey: getGetOpenTradesQueryKey(),
+      queryKey: getGetTradesQueryKey(tradeParams),
       refetchInterval: 15000
     }
   });
@@ -31,6 +36,11 @@ export default function OpenTrades() {
             Open Trades
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Live active positions</p>
+        </div>
+        <div className="flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-md border border-border bg-card">
+          <Button variant={source === "all" ? "default" : "outline"} size="sm" className="h-7 font-mono text-xs" onClick={() => setSource("all")}>ALL</Button>
+          <Button variant={source === "TECHNICAL" ? "default" : "outline"} size="sm" className="h-7 font-mono text-xs" onClick={() => setSource("TECHNICAL")}>TECH</Button>
+          <Button variant={source === "SMC" ? "default" : "outline"} size="sm" className="h-7 font-mono text-xs" onClick={() => setSource("SMC")}>SMC</Button>
         </div>
         <div className="flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-md border border-border bg-card">
           {hasLive ? (
@@ -145,7 +155,11 @@ function LiveTradeCard({ trade, livePrices }: { trade: any; livePrices: Record<s
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="font-mono text-lg font-bold text-foreground">{trade.symbol}</div>
-          <div className="mt-1 text-[10px] font-mono text-muted-foreground">{trade.tradeId?.slice(0, 8)}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px] font-mono text-muted-foreground">
+            <span>{trade.tradeId?.slice(0, 8)}</span>
+            <SourceBadge item={trade} />
+            {trade.source === "SMC" && trade.smcScore != null && <span className="text-cyan-300">SMC {trade.smcScore}</span>}
+          </div>
         </div>
         <Badge variant="outline" className={`font-mono text-xs ${trade.direction === 'LONG' ? 'text-success border-success/30 bg-success/10' : 'text-destructive border-destructive/30 bg-destructive/10'}`}>
           {trade.direction}
@@ -246,6 +260,12 @@ function LiveTradeRow({ trade, livePrices }: { trade: any; livePrices: Record<st
         <div className="flex flex-col">
           {trade.symbol}
           <span className="text-[10px] text-muted-foreground font-normal">{trade.tradeId?.slice(0, 8)}</span>
+          <span className="mt-1 flex flex-wrap items-center gap-1">
+            <SourceBadge item={trade} />
+            {trade.source === "SMC" && trade.smcScore != null && (
+              <span className="text-[10px] text-cyan-300">SMC {trade.smcScore}</span>
+            )}
+          </span>
         </div>
       </TableCell>
 
@@ -363,6 +383,7 @@ function CloseTradeDialog({ trade, markPrice }: { trade: any; markPrice: number 
           toast({ title: "Trade Closed", description: `Closed ${trade.symbol} at ${exitPrice}` });
           setOpen(false);
           queryClient.invalidateQueries({ queryKey: getGetOpenTradesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetTradesQueryKey({ status: "open" }) });
         }
       }
     );
@@ -426,5 +447,14 @@ function CloseTradeDialog({ trade, markPrice }: { trade: any; markPrice: number 
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SourceBadge({ item }: { item: any }) {
+  const isSmc = item.source === "SMC" || item.scannerType === "SMC_SCANNER";
+  return (
+    <Badge variant="outline" className={`font-mono text-[10px] ${isSmc ? "border-cyan-400/40 bg-cyan-400/10 text-cyan-300" : "border-muted-foreground/30 text-muted-foreground"}`}>
+      {isSmc ? item.badge ?? "SMC" : "TECH"}
+    </Badge>
   );
 }

@@ -3,7 +3,7 @@ import type { AIContext, AIMessage, AIPromptTemplate } from "./types";
 const SYSTEM_PROMPT = [
   "You are QUANTEDGE AI Mentor, an advisory quant research assistant.",
   "You must never place trades, reject trades, instruct trade execution, or override risk controls.",
-  "Use only the structured context provided. Do not infer secrets or request credentials.",
+  "Use only the structured context provided. Do not infer sensitive values or request credentials.",
   "Return practical analysis for research and review.",
 ].join("\n");
 
@@ -44,6 +44,21 @@ export class PromptBuilder {
   }
 
   private sanitizeContext(context: AIContext): AIContext {
-    return JSON.parse(this.sanitize(JSON.stringify(context))) as AIContext;
+    return this.sanitizeValue(context) as AIContext;
+  }
+
+  private sanitizeValue(value: unknown): unknown {
+    if (typeof value === "string") {
+      return this.sanitize(value);
+    }
+    if (Array.isArray(value)) {
+      return value.map((item) => this.sanitizeValue(item));
+    }
+    if (value && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [key, this.sanitizeValue(item)]),
+      );
+    }
+    return value;
   }
 }

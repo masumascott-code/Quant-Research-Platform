@@ -3,13 +3,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { BookOpen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 export default function TradeJournal() {
+  const [source, setSource] = useState<"all" | "TECHNICAL" | "SMC">("all");
+  const tradeParams = {
+    status: "closed" as const,
+    limit: 100,
+    source: source !== "all" ? source : undefined,
+  };
   const { data: tradesData, isLoading } = useGetTrades(
-    { status: "closed", limit: 100 },
+    tradeParams,
     {
       query: {
-        queryKey: getGetTradesQueryKey({ status: "closed", limit: 100 })
+        queryKey: getGetTradesQueryKey(tradeParams)
       }
     }
   );
@@ -18,12 +26,19 @@ export default function TradeJournal() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <BookOpen className="h-6 w-6 text-primary" />
-          Trade Journal
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">History of all closed positions</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <BookOpen className="h-6 w-6 text-primary" />
+            Trade Journal
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">History of all closed positions</p>
+        </div>
+        <div className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5">
+          <Button variant={source === "all" ? "default" : "outline"} size="sm" className="h-7 font-mono text-xs" onClick={() => setSource("all")}>ALL</Button>
+          <Button variant={source === "TECHNICAL" ? "default" : "outline"} size="sm" className="h-7 font-mono text-xs" onClick={() => setSource("TECHNICAL")}>TECH</Button>
+          <Button variant={source === "SMC" ? "default" : "outline"} size="sm" className="h-7 font-mono text-xs" onClick={() => setSource("SMC")}>SMC</Button>
+        </div>
       </div>
 
       <div className="space-y-3 md:hidden">
@@ -87,6 +102,12 @@ export default function TradeJournal() {
                       <span className="font-bold text-foreground">{trade.symbol}</span>
                       <span className="text-[10px] text-muted-foreground">
                         {new Date(trade.closedAt).toLocaleDateString()}
+                      </span>
+                      <span className="mt-1 flex flex-wrap items-center gap-1">
+                        <SourceBadge item={trade} />
+                        {trade.source === "SMC" && trade.strategyLabel && (
+                          <span className="text-[10px] text-cyan-300">{trade.strategyLabel}</span>
+                        )}
                       </span>
                     </div>
                   </TableCell>
@@ -159,6 +180,10 @@ function TradeJournalCard({ trade }: { trade: any }) {
           <div className="mt-1 text-xs font-mono text-muted-foreground">
             {new Date(trade.closedAt).toLocaleDateString()}
           </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            <SourceBadge item={trade} />
+            {trade.source === "SMC" && trade.smcScore != null && <span className="text-[10px] text-cyan-300">SMC {trade.smcScore}</span>}
+          </div>
         </div>
         <div className="flex flex-col items-end gap-2">
           <Badge variant="outline" className={`font-mono text-[10px] ${trade.direction === 'LONG' ? 'text-success border-success/30' : 'text-destructive border-destructive/30'}`}>
@@ -203,5 +228,14 @@ function TradeJournalCard({ trade }: { trade: any }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function SourceBadge({ item }: { item: any }) {
+  const isSmc = item.source === "SMC" || item.scannerType === "SMC_SCANNER";
+  return (
+    <Badge variant="outline" className={`font-mono text-[10px] ${isSmc ? "border-cyan-400/40 bg-cyan-400/10 text-cyan-300" : "border-muted-foreground/30 text-muted-foreground"}`}>
+      {isSmc ? item.badge ?? "SMC" : "TECH"}
+    </Badge>
   );
 }

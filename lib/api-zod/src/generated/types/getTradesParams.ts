@@ -8,10 +8,14 @@
 import type { GetTradesDirection } from './getTradesDirection';
 import type { GetTradesResult } from './getTradesResult';
 import type { GetTradesStatus } from './getTradesStatus';
+import type { ScannerType } from './scannerType';
+import type { SignalSource } from './signalSource';
 
 export type GetTradesParams = {
 status?: GetTradesStatus;
 direction?: GetTradesDirection;
 result?: GetTradesResult;
+source?: SignalSource;
+scannerType?: ScannerType;
 limit?: number;
 };

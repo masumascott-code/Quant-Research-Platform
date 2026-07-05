@@ -1,4 +1,4 @@
-import { pgTable, serial, text, numeric, timestamp, integer, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, timestamp, index, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -6,6 +6,13 @@ export const signalsTable = pgTable("signals", {
   id: serial("id").primaryKey(),
   symbol: text("symbol").notNull(),
   direction: text("direction").notNull(),
+  source: text("source").notNull().default("TECHNICAL"),
+  scannerType: text("scanner_type").notNull().default("TECHNICAL_SCANNER"),
+  strategyType: text("strategy_type").notNull().default("TECHNICAL"),
+  strategyLabel: text("strategy_label"),
+  badge: text("badge"),
+  smcScore: numeric("smc_score", { precision: 5, scale: 2 }),
+  smcDetails: jsonb("smc_details"),
   score: numeric("score", { precision: 5, scale: 2 }).notNull(),
   grade: text("grade").notNull(),
   confidence: text("confidence").notNull().default("Medium"),
@@ -38,6 +45,8 @@ export const signalsTable = pgTable("signals", {
 }, (table) => [
   index("idx_signals_symbol").on(table.symbol),
   index("idx_signals_status").on(table.status),
+  index("idx_signals_source").on(table.source),
+  index("idx_signals_scanner_type").on(table.scannerType),
   index("idx_signals_created_at").on(table.createdAt),
 ]);
 

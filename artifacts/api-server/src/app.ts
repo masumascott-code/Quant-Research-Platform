@@ -6,6 +6,7 @@ import { securityConfig } from "./config/security";
 import { logger } from "./lib/logger";
 import { rateLimit } from "./middleware/security";
 import { ScannerService } from "./services/scanner";
+import { SmcScannerService } from "./services/smc-scanner";
 import { PriceTracker } from "./services/price-tracker";
 import { SlMonitor } from "./services/sl-monitor";
 import { TelegramCommandBot } from "./services/telegram-command-bot";
@@ -83,6 +84,10 @@ if (boolEnv("RUN_BACKGROUND_SERVICES", true)) {
   setTimeout(() => {
     const scanner = ScannerService.getInstance();
     scanner.start().catch(err => logger.error({ err }, "Failed to auto-start scanner"));
+
+    SmcScannerService.getInstance()
+      .start()
+      .catch(err => logger.error({ err }, "Failed to auto-start SMC scanner"));
 
     const tracker = PriceTracker.getInstance();
     tracker.start().catch(err => logger.error({ err }, "Failed to start price tracker"));

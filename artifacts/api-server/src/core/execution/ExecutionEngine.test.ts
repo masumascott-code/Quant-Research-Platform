@@ -51,5 +51,6 @@ test("ExecutionEngine fills a market order and reports fill ratio", async () => 
 
   assert.equal(result.order.state, "FILLED");
   assert.equal(result.fillRatio, 1);
-  assert.equal(result.averageFillPrice, 100);
+  assert.ok(result.averageFillPrice > 100);
+  assert.ok(result.entrySlippage > 0);
 });

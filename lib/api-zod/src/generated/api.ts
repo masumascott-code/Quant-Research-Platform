@@ -29,9 +29,36 @@ export const LoginResponse = zod.object({
   "tokenType": zod.enum(['Bearer']),
   "expiresIn": zod.number(),
   "user": zod.object({
+  "userId": zod.number().optional(),
   "username": zod.string(),
   "role": zod.enum(['admin', 'viewer'])
 })
+})
+
+
+/**
+ * @summary Request a new viewer account
+ */
+export const registerBodyUsernameMin = 3;
+export const registerBodyUsernameMax = 32;
+
+
+export const registerBodyUsernameRegExp = new RegExp('^[a-zA-Z0-9._-]+$');
+export const registerBodyPasswordMin = 12;
+export const registerBodyPasswordMax = 1024;
+
+
+
+export const RegisterBody = zod.object({
+  "email": zod.string().email(),
+  "username": zod.string().min(registerBodyUsernameMin).max(registerBodyUsernameMax).regex(registerBodyUsernameRegExp),
+  "password": zod.string().min(registerBodyPasswordMin).max(registerBodyPasswordMax)
+})
+
+export const RegisterResponse = zod.object({
+  "success": zod.boolean(),
+  "status": zod.enum(['pending', 'active']),
+  "message": zod.string()
 })
 
 
@@ -40,8 +67,83 @@ export const LoginResponse = zod.object({
  */
 export const GetCurrentUserResponse = zod.object({
   "user": zod.object({
+  "userId": zod.number().optional(),
   "username": zod.string(),
   "role": zod.enum(['admin', 'viewer'])
+})
+})
+
+
+/**
+ * @summary List registered application users for admin approval
+ */
+export const listAdminUsersQueryLimitMax = 100;
+
+
+
+export const ListAdminUsersQueryParams = zod.object({
+  "status": zod.enum(['pending', 'active', 'disabled', 'all']).optional().describe('Defaults to pending.'),
+  "limit": zod.coerce.number().min(1).max(listAdminUsersQueryLimitMax).optional()
+})
+
+export const ListAdminUsersResponse = zod.object({
+  "users": zod.array(zod.object({
+  "id": zod.number(),
+  "email": zod.string().email(),
+  "username": zod.string(),
+  "role": zod.enum(['admin', 'viewer']),
+  "status": zod.enum(['pending', 'active', 'disabled']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "approvedAt": zod.coerce.date().nullish(),
+  "approvedBy": zod.string().nullish(),
+  "lastLoginAt": zod.coerce.date().nullish()
+}))
+})
+
+
+/**
+ * @summary Approve a registered user
+ */
+export const ApproveAdminUserParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ApproveAdminUserResponse = zod.object({
+  "user": zod.object({
+  "id": zod.number(),
+  "email": zod.string().email(),
+  "username": zod.string(),
+  "role": zod.enum(['admin', 'viewer']),
+  "status": zod.enum(['pending', 'active', 'disabled']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "approvedAt": zod.coerce.date().nullish(),
+  "approvedBy": zod.string().nullish(),
+  "lastLoginAt": zod.coerce.date().nullish()
+})
+})
+
+
+/**
+ * @summary Disable a registered user
+ */
+export const DisableAdminUserParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DisableAdminUserResponse = zod.object({
+  "user": zod.object({
+  "id": zod.number(),
+  "email": zod.string().email(),
+  "username": zod.string(),
+  "role": zod.enum(['admin', 'viewer']),
+  "status": zod.enum(['pending', 'active', 'disabled']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "approvedAt": zod.coerce.date().nullish(),
+  "approvedBy": zod.string().nullish(),
+  "lastLoginAt": zod.coerce.date().nullish()
 })
 })
 
@@ -79,6 +181,41 @@ export const StopScannerResponse = zod.object({
 
 
 /**
+ * @summary Get SMC scanner status
+ */
+export const GetSmcScannerStatusResponse = zod.object({
+  "running": zod.boolean(),
+  "enabled": zod.boolean(),
+  "lastScanAt": zod.string().nullable(),
+  "nextScanIn": zod.number().nullable()
+})
+
+
+/**
+ * @summary Start the SMC scanner if enabled
+ */
+export const StartSmcScannerResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string(),
+  "status": zod.object({
+  "running": zod.boolean(),
+  "enabled": zod.boolean(),
+  "lastScanAt": zod.string().nullable(),
+  "nextScanIn": zod.number().nullable()
+})
+})
+
+
+/**
+ * @summary Stop the SMC scanner
+ */
+export const StopSmcScannerResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string()
+})
+
+
+/**
  * @summary Get top gainers list
  */
 export const getTopGainersQueryLimitDefault = 20;
@@ -99,7 +236,16 @@ export const GetTopGainersResponseItem = zod.object({
   "ema50": zod.number().nullish(),
   "atr14": zod.number().nullish(),
   "trend": zod.string().nullish(),
-  "scannedAt": zod.string().optional()
+  "scannedAt": zod.string().optional(),
+  "latestDecision": zod.union([zod.object({
+  "decision": zod.enum(['ACCEPTED', 'REJECTED', 'SKIPPED']),
+  "scoreAvailable": zod.boolean(),
+  "finalScore": zod.number(),
+  "technicalScore": zod.number(),
+  "strategy": zod.string(),
+  "reason": zod.string().nullable(),
+  "createdAt": zod.string()
+}),zod.null()]).optional()
 })
 export const GetTopGainersResponse = zod.array(GetTopGainersResponseItem)
 
@@ -125,7 +271,16 @@ export const GetTopLosersResponseItem = zod.object({
   "ema50": zod.number().nullish(),
   "atr14": zod.number().nullish(),
   "trend": zod.string().nullish(),
-  "scannedAt": zod.string().optional()
+  "scannedAt": zod.string().optional(),
+  "latestDecision": zod.union([zod.object({
+  "decision": zod.enum(['ACCEPTED', 'REJECTED', 'SKIPPED']),
+  "scoreAvailable": zod.boolean(),
+  "finalScore": zod.number(),
+  "technicalScore": zod.number(),
+  "strategy": zod.string(),
+  "reason": zod.string().nullable(),
+  "createdAt": zod.string()
+}),zod.null()]).optional()
 })
 export const GetTopLosersResponse = zod.array(GetTopLosersResponseItem)
 
@@ -147,6 +302,300 @@ export const GetCoinsResponse = zod.array(GetCoinsResponseItem)
 
 
 /**
+ * @summary Get recent scanner diagnostic decisions
+ */
+export const getScannerDiagnosticsQueryLimitDefault = 12;
+export const getScannerDiagnosticsQueryLimitMax = 50;
+
+
+
+export const GetScannerDiagnosticsQueryParams = zod.object({
+  "limit": zod.coerce.number().min(1).max(getScannerDiagnosticsQueryLimitMax).default(getScannerDiagnosticsQueryLimitDefault),
+  "source": zod.enum(['TECHNICAL', 'SMC']).optional(),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']).optional()
+})
+
+export const GetScannerDiagnosticsResponse = zod.object({
+  "running": zod.boolean(),
+  "lastScanAt": zod.string().nullable(),
+  "nextScanIn": zod.number().nullable(),
+  "diagnosticsAvailable": zod.boolean(),
+  "diagnosticsFrom": zod.string(),
+  "message": zod.string().optional(),
+  "scanActivity": zod.object({
+  "latestSnapshotAt": zod.string().nullable(),
+  "snapshotsLast10m": zod.number()
+}),
+  "today": zod.object({
+  "totalDecisions": zod.number(),
+  "accepted": zod.number(),
+  "rejected": zod.number(),
+  "skipped": zod.number(),
+  "averageFinalScore": zod.number(),
+  "averageConfidence": zod.number(),
+  "topRejectedReasons": zod.array(zod.object({
+  "reason": zod.string(),
+  "count": zod.number()
+}))
+}),
+  "recentDecisions": zod.array(zod.object({
+  "id": zod.number(),
+  "symbol": zod.string(),
+  "direction": zod.enum(['LONG', 'SHORT']),
+  "source": zod.enum(['TECHNICAL', 'SMC']),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']),
+  "strategyType": zod.string().optional(),
+  "strategyLabel": zod.string().nullish(),
+  "badge": zod.string().nullish(),
+  "smcScore": zod.number().nullish(),
+  "smcDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
+  "componentScores": zod.union([zod.record(zod.string(), zod.number().nullable()),zod.null()]).optional(),
+  "diagnosticDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
+  "rejectionStage": zod.string().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "blockedReason": zod.string().nullish(),
+  "shortProtection": zod.union([zod.object({
+  "priceChangePercent": zod.number().nullish(),
+  "distanceFromEMA20": zod.number().nullish(),
+  "distanceFromEMA50": zod.number().nullish(),
+  "isShortOverextended": zod.boolean().optional(),
+  "hasBearishRetest": zod.boolean().optional(),
+  "marketRegime": zod.string().nullish(),
+  "btcTrendBias": zod.string().nullish(),
+  "shortProtectionWouldBlock": zod.boolean().optional(),
+  "shortProtectionReasons": zod.array(zod.string()).optional()
+}),zod.null()]).optional(),
+  "shortProtectionWouldBlock": zod.boolean().optional(),
+  "shortProtectionReasons": zod.array(zod.string()).optional(),
+  "decision": zod.enum(['ACCEPTED', 'REJECTED', 'SKIPPED']),
+  "strategy": zod.string(),
+  "finalScore": zod.number(),
+  "technicalScore": zod.number(),
+  "confidence": zod.number(),
+  "marketRegime": zod.string(),
+  "opportunityRank": zod.number().nullish(),
+  "riskGrade": zod.string(),
+  "reasons": zod.array(zod.string()),
+  "riskSummary": zod.array(zod.string()),
+  "scansToday": zod.number(),
+  "scoreAvailable": zod.boolean(),
+  "createdAt": zod.string()
+})),
+  "partitions": zod.object({
+  "accepted": zod.array(zod.object({
+  "id": zod.number(),
+  "symbol": zod.string(),
+  "direction": zod.enum(['LONG', 'SHORT']),
+  "source": zod.enum(['TECHNICAL', 'SMC']),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']),
+  "strategyType": zod.string().optional(),
+  "strategyLabel": zod.string().nullish(),
+  "badge": zod.string().nullish(),
+  "smcScore": zod.number().nullish(),
+  "smcDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
+  "componentScores": zod.union([zod.record(zod.string(), zod.number().nullable()),zod.null()]).optional(),
+  "diagnosticDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
+  "rejectionStage": zod.string().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "blockedReason": zod.string().nullish(),
+  "shortProtection": zod.union([zod.object({
+  "priceChangePercent": zod.number().nullish(),
+  "distanceFromEMA20": zod.number().nullish(),
+  "distanceFromEMA50": zod.number().nullish(),
+  "isShortOverextended": zod.boolean().optional(),
+  "hasBearishRetest": zod.boolean().optional(),
+  "marketRegime": zod.string().nullish(),
+  "btcTrendBias": zod.string().nullish(),
+  "shortProtectionWouldBlock": zod.boolean().optional(),
+  "shortProtectionReasons": zod.array(zod.string()).optional()
+}),zod.null()]).optional(),
+  "shortProtectionWouldBlock": zod.boolean().optional(),
+  "shortProtectionReasons": zod.array(zod.string()).optional(),
+  "decision": zod.enum(['ACCEPTED', 'REJECTED', 'SKIPPED']),
+  "strategy": zod.string(),
+  "finalScore": zod.number(),
+  "technicalScore": zod.number(),
+  "confidence": zod.number(),
+  "marketRegime": zod.string(),
+  "opportunityRank": zod.number().nullish(),
+  "riskGrade": zod.string(),
+  "reasons": zod.array(zod.string()),
+  "riskSummary": zod.array(zod.string()),
+  "scansToday": zod.number(),
+  "scoreAvailable": zod.boolean(),
+  "createdAt": zod.string()
+})),
+  "skipped": zod.array(zod.object({
+  "id": zod.number(),
+  "symbol": zod.string(),
+  "direction": zod.enum(['LONG', 'SHORT']),
+  "source": zod.enum(['TECHNICAL', 'SMC']),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']),
+  "strategyType": zod.string().optional(),
+  "strategyLabel": zod.string().nullish(),
+  "badge": zod.string().nullish(),
+  "smcScore": zod.number().nullish(),
+  "smcDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
+  "componentScores": zod.union([zod.record(zod.string(), zod.number().nullable()),zod.null()]).optional(),
+  "diagnosticDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
+  "rejectionStage": zod.string().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "blockedReason": zod.string().nullish(),
+  "shortProtection": zod.union([zod.object({
+  "priceChangePercent": zod.number().nullish(),
+  "distanceFromEMA20": zod.number().nullish(),
+  "distanceFromEMA50": zod.number().nullish(),
+  "isShortOverextended": zod.boolean().optional(),
+  "hasBearishRetest": zod.boolean().optional(),
+  "marketRegime": zod.string().nullish(),
+  "btcTrendBias": zod.string().nullish(),
+  "shortProtectionWouldBlock": zod.boolean().optional(),
+  "shortProtectionReasons": zod.array(zod.string()).optional()
+}),zod.null()]).optional(),
+  "shortProtectionWouldBlock": zod.boolean().optional(),
+  "shortProtectionReasons": zod.array(zod.string()).optional(),
+  "decision": zod.enum(['ACCEPTED', 'REJECTED', 'SKIPPED']),
+  "strategy": zod.string(),
+  "finalScore": zod.number(),
+  "technicalScore": zod.number(),
+  "confidence": zod.number(),
+  "marketRegime": zod.string(),
+  "opportunityRank": zod.number().nullish(),
+  "riskGrade": zod.string(),
+  "reasons": zod.array(zod.string()),
+  "riskSummary": zod.array(zod.string()),
+  "scansToday": zod.number(),
+  "scoreAvailable": zod.boolean(),
+  "createdAt": zod.string()
+})),
+  "rejected": zod.array(zod.object({
+  "id": zod.number(),
+  "symbol": zod.string(),
+  "direction": zod.enum(['LONG', 'SHORT']),
+  "source": zod.enum(['TECHNICAL', 'SMC']),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']),
+  "strategyType": zod.string().optional(),
+  "strategyLabel": zod.string().nullish(),
+  "badge": zod.string().nullish(),
+  "smcScore": zod.number().nullish(),
+  "smcDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
+  "componentScores": zod.union([zod.record(zod.string(), zod.number().nullable()),zod.null()]).optional(),
+  "diagnosticDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
+  "rejectionStage": zod.string().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "blockedReason": zod.string().nullish(),
+  "shortProtection": zod.union([zod.object({
+  "priceChangePercent": zod.number().nullish(),
+  "distanceFromEMA20": zod.number().nullish(),
+  "distanceFromEMA50": zod.number().nullish(),
+  "isShortOverextended": zod.boolean().optional(),
+  "hasBearishRetest": zod.boolean().optional(),
+  "marketRegime": zod.string().nullish(),
+  "btcTrendBias": zod.string().nullish(),
+  "shortProtectionWouldBlock": zod.boolean().optional(),
+  "shortProtectionReasons": zod.array(zod.string()).optional()
+}),zod.null()]).optional(),
+  "shortProtectionWouldBlock": zod.boolean().optional(),
+  "shortProtectionReasons": zod.array(zod.string()).optional(),
+  "decision": zod.enum(['ACCEPTED', 'REJECTED', 'SKIPPED']),
+  "strategy": zod.string(),
+  "finalScore": zod.number(),
+  "technicalScore": zod.number(),
+  "confidence": zod.number(),
+  "marketRegime": zod.string(),
+  "opportunityRank": zod.number().nullish(),
+  "riskGrade": zod.string(),
+  "reasons": zod.array(zod.string()),
+  "riskSummary": zod.array(zod.string()),
+  "scansToday": zod.number(),
+  "scoreAvailable": zod.boolean(),
+  "createdAt": zod.string()
+}))
+}).optional(),
+  "recentSnapshots": zod.array(zod.object({
+  "id": zod.number(),
+  "symbol": zod.string(),
+  "price": zod.number(),
+  "priceChangePercent": zod.number(),
+  "volume24h": zod.number(),
+  "rvol": zod.number(),
+  "rank": zod.number(),
+  "listType": zod.string(),
+  "ema20": zod.number().nullish(),
+  "ema50": zod.number().nullish(),
+  "atr14": zod.number().nullish(),
+  "trend": zod.string().nullish(),
+  "scannedAt": zod.string()
+}))
+})
+
+
+/**
+ * @summary Get scanner diagnostics summary
+ */
+export const getScannerDiagnosticsSummaryQueryHoursDefault = 24;
+export const getScannerDiagnosticsSummaryQueryHoursMax = 720;
+
+
+
+export const GetScannerDiagnosticsSummaryQueryParams = zod.object({
+  "hours": zod.coerce.number().min(1).max(getScannerDiagnosticsSummaryQueryHoursMax).default(getScannerDiagnosticsSummaryQueryHoursDefault),
+  "source": zod.enum(['TECHNICAL', 'SMC']).optional(),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']).optional()
+})
+
+export const GetScannerDiagnosticsSummaryResponse = zod.object({
+  "diagnosticsAvailable": zod.boolean(),
+  "hours": zod.number(),
+  "from": zod.string(),
+  "totalDiagnostics": zod.number(),
+  "acceptedCount": zod.number(),
+  "rejectedCount": zod.number(),
+  "skippedCount": zod.number(),
+  "averageTechnicalScore": zod.number(),
+  "averageFinalScore": zod.number(),
+  "rejectionStageBreakdown": zod.array(zod.object({
+  "stage": zod.string(),
+  "count": zod.number()
+})),
+  "rejectionReasonBreakdown": zod.array(zod.object({
+  "reason": zod.string(),
+  "count": zod.number()
+})),
+  "directionCounts": zod.object({
+  "LONG": zod.number(),
+  "SHORT": zod.number()
+}),
+  "longDiagnosticsCount": zod.number(),
+  "shortDiagnosticsCount": zod.number(),
+  "shortWouldBlockCount": zod.number(),
+  "topShortProtectionReasons": zod.array(zod.object({
+  "reason": zod.string(),
+  "count": zod.number()
+})),
+  "averageScoreByDirection": zod.object({
+  "LONG": zod.object({
+  "technicalScore": zod.number(),
+  "finalScore": zod.number()
+}),
+  "SHORT": zod.object({
+  "technicalScore": zod.number(),
+  "finalScore": zod.number()
+})
+}),
+  "acceptedByDirection": zod.object({
+  "LONG": zod.number(),
+  "SHORT": zod.number()
+}),
+  "rejectedByDirection": zod.object({
+  "LONG": zod.number(),
+  "SHORT": zod.number()
+}),
+  "message": zod.string().optional()
+})
+
+
+/**
  * @summary Get scanner dashboard summary
  */
 export const GetScannerDashboardResponse = zod.object({
@@ -160,14 +609,14 @@ export const GetScannerDashboardResponse = zod.object({
   "totalPnl": zod.number(),
   "winRate": zod.number(),
   "portfolio": zod.object({
-    "currency": zod.string(),
-    "equity": zod.number(),
-    "availableBalance": zod.number(),
-    "usedMargin": zod.number(),
-    "freeMargin": zod.number(),
-    "openExposure": zod.number(),
-    "riskUsagePercent": zod.number()
-  }).optional(),
+  "currency": zod.string(),
+  "equity": zod.number(),
+  "availableBalance": zod.number(),
+  "usedMargin": zod.number(),
+  "freeMargin": zod.number(),
+  "openExposure": zod.number(),
+  "riskUsagePercent": zod.number()
+}).optional(),
   "lastScanAt": zod.string().nullish()
 })
 
@@ -180,6 +629,8 @@ export const getSignalsQueryLimitDefault = 50;
 export const GetSignalsQueryParams = zod.object({
   "status": zod.enum(['pending', 'active', 'expired', 'traded']).optional(),
   "direction": zod.enum(['LONG', 'SHORT']).optional(),
+  "source": zod.enum(['TECHNICAL', 'SMC']).optional(),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']).optional(),
   "limit": zod.coerce.number().default(getSignalsQueryLimitDefault)
 })
 
@@ -187,6 +638,13 @@ export const GetSignalsResponseItem = zod.object({
   "id": zod.number(),
   "symbol": zod.string(),
   "direction": zod.enum(['LONG', 'SHORT']),
+  "source": zod.enum(['TECHNICAL', 'SMC']).optional(),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']).optional(),
+  "strategyType": zod.string().optional(),
+  "strategyLabel": zod.string().nullish(),
+  "badge": zod.string().nullish(),
+  "smcScore": zod.number().nullish(),
+  "smcDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
   "score": zod.number(),
   "grade": zod.enum(['A+', 'A']),
   "entryPrice": zod.number(),
@@ -220,6 +678,13 @@ export const GetSignalResponse = zod.object({
   "id": zod.number(),
   "symbol": zod.string(),
   "direction": zod.enum(['LONG', 'SHORT']),
+  "source": zod.enum(['TECHNICAL', 'SMC']).optional(),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']).optional(),
+  "strategyType": zod.string().optional(),
+  "strategyLabel": zod.string().nullish(),
+  "badge": zod.string().nullish(),
+  "smcScore": zod.number().nullish(),
+  "smcDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
   "score": zod.number(),
   "grade": zod.enum(['A+', 'A']),
   "entryPrice": zod.number(),
@@ -248,6 +713,13 @@ export const GetActiveSignalsResponseItem = zod.object({
   "id": zod.number(),
   "symbol": zod.string(),
   "direction": zod.enum(['LONG', 'SHORT']),
+  "source": zod.enum(['TECHNICAL', 'SMC']).optional(),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']).optional(),
+  "strategyType": zod.string().optional(),
+  "strategyLabel": zod.string().nullish(),
+  "badge": zod.string().nullish(),
+  "smcScore": zod.number().nullish(),
+  "smcDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
   "score": zod.number(),
   "grade": zod.enum(['A+', 'A']),
   "entryPrice": zod.number(),
@@ -279,6 +751,8 @@ export const GetTradesQueryParams = zod.object({
   "status": zod.enum(['open', 'closed']).optional(),
   "direction": zod.enum(['LONG', 'SHORT']).optional(),
   "result": zod.enum(['WIN', 'LOSS', 'BREAKEVEN']).optional(),
+  "source": zod.enum(['TECHNICAL', 'SMC']).optional(),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']).optional(),
   "limit": zod.coerce.number().default(getTradesQueryLimitDefault)
 })
 
@@ -287,6 +761,13 @@ export const GetTradesResponseItem = zod.object({
   "tradeId": zod.string(),
   "symbol": zod.string(),
   "direction": zod.enum(['LONG', 'SHORT']),
+  "source": zod.enum(['TECHNICAL', 'SMC']).optional(),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']).optional(),
+  "strategyType": zod.string().optional(),
+  "strategyLabel": zod.string().nullish(),
+  "badge": zod.string().nullish(),
+  "smcScore": zod.number().nullish(),
+  "smcDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
   "entryPrice": zod.number(),
   "stopLoss": zod.number(),
   "currentSl": zod.number().nullish(),
@@ -322,6 +803,13 @@ export const GetOpenTradesResponseItem = zod.object({
   "tradeId": zod.string(),
   "symbol": zod.string(),
   "direction": zod.enum(['LONG', 'SHORT']),
+  "source": zod.enum(['TECHNICAL', 'SMC']).optional(),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']).optional(),
+  "strategyType": zod.string().optional(),
+  "strategyLabel": zod.string().nullish(),
+  "badge": zod.string().nullish(),
+  "smcScore": zod.number().nullish(),
+  "smcDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
   "entryPrice": zod.number(),
   "stopLoss": zod.number(),
   "currentSl": zod.number().nullish(),
@@ -361,6 +849,13 @@ export const GetTradeResponse = zod.object({
   "tradeId": zod.string(),
   "symbol": zod.string(),
   "direction": zod.enum(['LONG', 'SHORT']),
+  "source": zod.enum(['TECHNICAL', 'SMC']).optional(),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']).optional(),
+  "strategyType": zod.string().optional(),
+  "strategyLabel": zod.string().nullish(),
+  "badge": zod.string().nullish(),
+  "smcScore": zod.number().nullish(),
+  "smcDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
   "entryPrice": zod.number(),
   "stopLoss": zod.number(),
   "currentSl": zod.number().nullish(),
@@ -404,6 +899,13 @@ export const CloseTradeResponse = zod.object({
   "tradeId": zod.string(),
   "symbol": zod.string(),
   "direction": zod.enum(['LONG', 'SHORT']),
+  "source": zod.enum(['TECHNICAL', 'SMC']).optional(),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']).optional(),
+  "strategyType": zod.string().optional(),
+  "strategyLabel": zod.string().nullish(),
+  "badge": zod.string().nullish(),
+  "smcScore": zod.number().nullish(),
+  "smcDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
   "entryPrice": zod.number(),
   "stopLoss": zod.number(),
   "currentSl": zod.number().nullish(),
@@ -453,6 +955,13 @@ export const GetAnalyticsDashboardResponse = zod.object({
   "tradeId": zod.string(),
   "symbol": zod.string(),
   "direction": zod.enum(['LONG', 'SHORT']),
+  "source": zod.enum(['TECHNICAL', 'SMC']).optional(),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']).optional(),
+  "strategyType": zod.string().optional(),
+  "strategyLabel": zod.string().nullish(),
+  "badge": zod.string().nullish(),
+  "smcScore": zod.number().nullish(),
+  "smcDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
   "entryPrice": zod.number(),
   "stopLoss": zod.number(),
   "currentSl": zod.number().nullish(),
@@ -482,6 +991,13 @@ export const GetAnalyticsDashboardResponse = zod.object({
   "tradeId": zod.string(),
   "symbol": zod.string(),
   "direction": zod.enum(['LONG', 'SHORT']),
+  "source": zod.enum(['TECHNICAL', 'SMC']).optional(),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']).optional(),
+  "strategyType": zod.string().optional(),
+  "strategyLabel": zod.string().nullish(),
+  "badge": zod.string().nullish(),
+  "smcScore": zod.number().nullish(),
+  "smcDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
   "entryPrice": zod.number(),
   "stopLoss": zod.number(),
   "currentSl": zod.number().nullish(),
@@ -512,6 +1028,13 @@ export const GetAnalyticsDashboardResponse = zod.object({
   "tradeId": zod.string(),
   "symbol": zod.string(),
   "direction": zod.enum(['LONG', 'SHORT']),
+  "source": zod.enum(['TECHNICAL', 'SMC']).optional(),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']).optional(),
+  "strategyType": zod.string().optional(),
+  "strategyLabel": zod.string().nullish(),
+  "badge": zod.string().nullish(),
+  "smcScore": zod.number().nullish(),
+  "smcDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
   "entryPrice": zod.number(),
   "stopLoss": zod.number(),
   "currentSl": zod.number().nullish(),
@@ -580,6 +1103,13 @@ export const GetPerformanceStatsResponse = zod.object({
   "tradeId": zod.string(),
   "symbol": zod.string(),
   "direction": zod.enum(['LONG', 'SHORT']),
+  "source": zod.enum(['TECHNICAL', 'SMC']).optional(),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']).optional(),
+  "strategyType": zod.string().optional(),
+  "strategyLabel": zod.string().nullish(),
+  "badge": zod.string().nullish(),
+  "smcScore": zod.number().nullish(),
+  "smcDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
   "entryPrice": zod.number(),
   "stopLoss": zod.number(),
   "currentSl": zod.number().nullish(),
@@ -609,6 +1139,13 @@ export const GetPerformanceStatsResponse = zod.object({
   "tradeId": zod.string(),
   "symbol": zod.string(),
   "direction": zod.enum(['LONG', 'SHORT']),
+  "source": zod.enum(['TECHNICAL', 'SMC']).optional(),
+  "scannerType": zod.enum(['TECHNICAL_SCANNER', 'SMC_SCANNER']).optional(),
+  "strategyType": zod.string().optional(),
+  "strategyLabel": zod.string().nullish(),
+  "badge": zod.string().nullish(),
+  "smcScore": zod.number().nullish(),
+  "smcDetails": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
   "entryPrice": zod.number(),
   "stopLoss": zod.number(),
   "currentSl": zod.number().nullish(),
@@ -706,6 +1243,70 @@ export const GetPnlCurveResponse = zod.array(GetPnlCurveResponseItem)
 
 
 /**
+ * @summary Get closed trade performance by direction
+ */
+export const getDirectionPerformanceQueryDaysDefault = 90;
+export const getDirectionPerformanceQueryDaysMax = 3650;
+
+
+
+export const GetDirectionPerformanceQueryParams = zod.object({
+  "days": zod.coerce.number().min(1).max(getDirectionPerformanceQueryDaysMax).default(getDirectionPerformanceQueryDaysDefault)
+})
+
+export const GetDirectionPerformanceResponse = zod.object({
+  "days": zod.number(),
+  "from": zod.string(),
+  "closedLongTradeCount": zod.number(),
+  "closedShortTradeCount": zod.number(),
+  "longWinRate": zod.number(),
+  "shortWinRate": zod.number(),
+  "averageLongPnl": zod.number(),
+  "averageShortPnl": zod.number(),
+  "averageLongScore": zod.number(),
+  "averageShortScore": zod.number(),
+  "averageLongDurationMinutes": zod.number(),
+  "averageShortDurationMinutes": zod.number(),
+  "bestSymbols": zod.array(zod.object({
+  "symbol": zod.string(),
+  "direction": zod.enum(['LONG', 'SHORT']),
+  "totalPnl": zod.number(),
+  "averagePnl": zod.number(),
+  "averageScore": zod.number(),
+  "averageDurationMinutes": zod.number(),
+  "winRate": zod.number(),
+  "count": zod.number()
+})),
+  "worstSymbols": zod.array(zod.object({
+  "symbol": zod.string(),
+  "direction": zod.enum(['LONG', 'SHORT']),
+  "totalPnl": zod.number(),
+  "averagePnl": zod.number(),
+  "averageScore": zod.number(),
+  "averageDurationMinutes": zod.number(),
+  "winRate": zod.number(),
+  "count": zod.number()
+})),
+  "byDirection": zod.object({
+  "LONG": zod.object({
+  "closedTradeCount": zod.number(),
+  "winRate": zod.number(),
+  "averagePnl": zod.number(),
+  "averageScore": zod.number(),
+  "averageDurationMinutes": zod.number()
+}),
+  "SHORT": zod.object({
+  "closedTradeCount": zod.number(),
+  "winRate": zod.number(),
+  "averagePnl": zod.number(),
+  "averageScore": zod.number(),
+  "averageDurationMinutes": zod.number()
+})
+})
+})
+
+
+/**
  * @summary Get trade reviews from learning engine
  */
 export const getTradeReviewsQueryLimitDefault = 20;
@@ -789,4 +1390,3 @@ export const GetWeeklyReportResponse = zod.object({
   "summary": zod.string(),
   "improvements": zod.array(zod.string())
 })
-

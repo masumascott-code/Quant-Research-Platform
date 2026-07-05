@@ -8,6 +8,13 @@ export type CloseTrigger = "MANUAL" | "STOP_LOSS" | "TP3";
 export interface TradeAnalysisInput {
   setupType?: string;
   confidence?: string;
+  source?: string;
+  scannerType?: string;
+  strategyType?: string;
+  strategyLabel?: string | null;
+  badge?: string | null;
+  smcScore?: number | null;
+  smcDetails?: unknown;
   entryPrice: number;
   stopLoss: number;
   tp1: number;
@@ -24,6 +31,13 @@ export interface TradeSignalInput {
   id: number;
   symbol: string;
   direction: string;
+  source?: string | null;
+  scannerType?: string | null;
+  strategyType?: string | null;
+  strategyLabel?: string | null;
+  badge?: string | null;
+  smcScore?: string | number | null;
+  smcDetails?: unknown;
 }
 
 export interface TradeOpenValues {
@@ -31,6 +45,13 @@ export interface TradeOpenValues {
   signalId: number;
   symbol: string;
   direction: string;
+  source?: string;
+  scannerType?: string;
+  strategyType?: string;
+  strategyLabel?: string | null;
+  badge?: string | null;
+  smcScore?: string | null;
+  smcDetails?: unknown;
   setupType?: string;
   confidence?: string;
   entryPrice: string;
@@ -73,6 +94,17 @@ export class TradeLifecycle {
       signalId: signal.id,
       symbol: signal.symbol,
       direction: signal.direction,
+      source: analysis.source ?? signal.source ?? undefined,
+      scannerType: analysis.scannerType ?? signal.scannerType ?? undefined,
+      strategyType: analysis.strategyType ?? signal.strategyType ?? undefined,
+      strategyLabel: analysis.strategyLabel ?? signal.strategyLabel ?? undefined,
+      badge: analysis.badge ?? signal.badge ?? undefined,
+      smcScore: analysis.smcScore != null
+        ? String(analysis.smcScore)
+        : signal.smcScore != null
+          ? String(signal.smcScore)
+          : undefined,
+      smcDetails: analysis.smcDetails ?? signal.smcDetails ?? undefined,
       setupType: analysis.setupType,
       confidence: analysis.confidence,
       entryPrice: String(analysis.entryPrice),

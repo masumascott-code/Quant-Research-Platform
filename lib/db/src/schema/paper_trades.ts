@@ -1,4 +1,4 @@
-import { pgTable, serial, text, numeric, timestamp, integer, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, timestamp, integer, boolean, index, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { signalsTable } from "./signals";
@@ -9,6 +9,13 @@ export const paperTradesTable = pgTable("paper_trades", {
   signalId: integer("signal_id").references(() => signalsTable.id),
   symbol: text("symbol").notNull(),
   direction: text("direction").notNull(),
+  source: text("source").notNull().default("TECHNICAL"),
+  scannerType: text("scanner_type").notNull().default("TECHNICAL_SCANNER"),
+  strategyType: text("strategy_type").notNull().default("TECHNICAL"),
+  strategyLabel: text("strategy_label"),
+  badge: text("badge"),
+  smcScore: numeric("smc_score", { precision: 5, scale: 2 }),
+  smcDetails: jsonb("smc_details"),
   setupType: text("setup_type"),
   confidence: text("confidence"),
   entryPrice: numeric("entry_price", { precision: 20, scale: 8 }).notNull(),
@@ -39,6 +46,8 @@ export const paperTradesTable = pgTable("paper_trades", {
 }, (table) => [
   index("idx_trades_symbol").on(table.symbol),
   index("idx_trades_status").on(table.status),
+  index("idx_trades_source").on(table.source),
+  index("idx_trades_scanner_type").on(table.scannerType),
   index("idx_trades_opened_at").on(table.openedAt),
   index("idx_trades_result").on(table.result),
 ]);

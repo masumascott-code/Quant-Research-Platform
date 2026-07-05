@@ -2,6 +2,7 @@ import { DEFAULT_RUNTIME_CONFIG } from "./defaults";
 import type { FlatRuntimeConfig, RuntimeConfig, RuntimeConfigValue } from "./types";
 
 type ConfigPath =
+  | "scanner.mode"
   | "scanner.binanceBaseUrl"
   | "scanner.scanIntervalMs"
   | "scanner.minVolume24h"
@@ -26,6 +27,49 @@ type ConfigPath =
   | "scanner.maxOpenTrades"
   | "scanner.maxDailyTrades"
   | "scanner.maxWeeklyTrades"
+  | "scanner.requireRetestForTrade"
+  | "scanner.allowBreakoutWithoutRetestToWatchlist"
+  | "shortProtection.enabled"
+  | "shortProtection.diagnosticOnly"
+  | "shortProtection.requireBearishMarketForShorts"
+  | "shortProtection.blockShortsInBullishRegime"
+  | "shortProtection.requireShortRetest"
+  | "shortProtection.maxShortExtensionFromEMA20"
+  | "shortProtection.maxShortExtensionFromEMA50"
+  | "shortProtection.maxNegative24hMoveForFreshShort"
+  | "longProtection.enabled"
+  | "longProtection.maxLongExtensionFromEMA20"
+  | "longProtection.maxLongExtensionFromEMA50"
+  | "longProtection.watchlistInsteadOfReject"
+  | "smcScanner.enabled"
+  | "smcScanner.shadowMode"
+  | "smcScanner.scanIntervalMs"
+  | "smcScanner.minQuoteVolume"
+  | "smcScanner.maxCandidates"
+  | "smcScanner.minSmcScoreTrade"
+  | "smcScanner.minSmcScoreWatchlist"
+  | "smcScanner.minRiskReward"
+  | "smcScanner.maxOpenTrades"
+  | "smcScanner.maxDailyTrades"
+  | "smcScanner.requireHtfBias"
+  | "smcScanner.requireLiquiditySweep"
+  | "smcScanner.requireBOSorCHOCH"
+  | "smcScanner.requireFvgOrOrderBlock"
+  | "smcScanner.requirePremiumDiscount"
+  | "smcScanner.useFibonacciConfluence"
+  | "smcScanner.allowWatchlistWithoutEntry"
+  | "smcScanner.paperTradingEnabled"
+  | "smcScanner.candles5mLimit"
+  | "smcScanner.candles15mLimit"
+  | "smcScanner.candlesH1Limit"
+  | "smcScanner.candlesH4Limit"
+  | "smcScanner.symbolCooldownMs"
+  | "smcScanner.symbolCooldownMinutes"
+  | "futuresEngine.enabled"
+  | "setupDna.enabled"
+  | "tradeForensics.enabled"
+  | "backtesting.enabled"
+  | "ruleBuilder.enabled"
   | "signal.emaFastPeriod"
   | "signal.emaSlowPeriod"
   | "signal.emaTrendPeriod"
@@ -150,6 +194,7 @@ const TRUE_BOOLEAN_VALUES = new Set(["1", "true", "yes", "on"]);
 const FALSE_BOOLEAN_VALUES = new Set(["0", "false", "no", "off"]);
 
 const CONFIG_VALUE_KINDS: Record<ConfigPath, ValueKind> = {
+  "scanner.mode": "string",
   "scanner.binanceBaseUrl": "string",
   "scanner.scanIntervalMs": "number",
   "scanner.minVolume24h": "number",
@@ -174,6 +219,49 @@ const CONFIG_VALUE_KINDS: Record<ConfigPath, ValueKind> = {
   "scanner.maxOpenTrades": "number",
   "scanner.maxDailyTrades": "number",
   "scanner.maxWeeklyTrades": "number",
+  "scanner.requireRetestForTrade": "boolean",
+  "scanner.allowBreakoutWithoutRetestToWatchlist": "boolean",
+  "shortProtection.enabled": "boolean",
+  "shortProtection.diagnosticOnly": "boolean",
+  "shortProtection.requireBearishMarketForShorts": "boolean",
+  "shortProtection.blockShortsInBullishRegime": "boolean",
+  "shortProtection.requireShortRetest": "boolean",
+  "shortProtection.maxShortExtensionFromEMA20": "number",
+  "shortProtection.maxShortExtensionFromEMA50": "number",
+  "shortProtection.maxNegative24hMoveForFreshShort": "number",
+  "longProtection.enabled": "boolean",
+  "longProtection.maxLongExtensionFromEMA20": "number",
+  "longProtection.maxLongExtensionFromEMA50": "number",
+  "longProtection.watchlistInsteadOfReject": "boolean",
+  "smcScanner.enabled": "boolean",
+  "smcScanner.shadowMode": "boolean",
+  "smcScanner.scanIntervalMs": "number",
+  "smcScanner.minQuoteVolume": "number",
+  "smcScanner.maxCandidates": "number",
+  "smcScanner.minSmcScoreTrade": "number",
+  "smcScanner.minSmcScoreWatchlist": "number",
+  "smcScanner.minRiskReward": "number",
+  "smcScanner.maxOpenTrades": "number",
+  "smcScanner.maxDailyTrades": "number",
+  "smcScanner.requireHtfBias": "boolean",
+  "smcScanner.requireLiquiditySweep": "boolean",
+  "smcScanner.requireBOSorCHOCH": "boolean",
+  "smcScanner.requireFvgOrOrderBlock": "boolean",
+  "smcScanner.requirePremiumDiscount": "boolean",
+  "smcScanner.useFibonacciConfluence": "boolean",
+  "smcScanner.allowWatchlistWithoutEntry": "boolean",
+  "smcScanner.paperTradingEnabled": "boolean",
+  "smcScanner.candles5mLimit": "number",
+  "smcScanner.candles15mLimit": "number",
+  "smcScanner.candlesH1Limit": "number",
+  "smcScanner.candlesH4Limit": "number",
+  "smcScanner.symbolCooldownMs": "number",
+  "smcScanner.symbolCooldownMinutes": "number",
+  "futuresEngine.enabled": "boolean",
+  "setupDna.enabled": "boolean",
+  "tradeForensics.enabled": "boolean",
+  "backtesting.enabled": "boolean",
+  "ruleBuilder.enabled": "boolean",
   "signal.emaFastPeriod": "number",
   "signal.emaSlowPeriod": "number",
   "signal.emaTrendPeriod": "number",
@@ -291,6 +379,7 @@ const CONFIG_VALUE_KINDS: Record<ConfigPath, ValueKind> = {
 
 export const LEGACY_CONFIG_ALIASES: Record<string, ConfigPath> = {
   scan_interval_seconds: "scanner.scanIntervalMs",
+  scanner_mode: "scanner.mode",
   min_score_trade: "scanner.minScoreTrade",
   min_score_watchlist: "scanner.minScoreWatchlist",
   min_rvol: "scanner.minRvol",
@@ -328,6 +417,17 @@ export const LEGACY_CONFIG_ALIASES: Record<string, ConfigPath> = {
   ai_timeout_ms: "ai.timeoutMs",
   ai_retry_count: "ai.retryCount",
   telegram_enabled: "notifications.telegramEnabled",
+  smc_scanner_enabled: "smcScanner.enabled",
+  smc_scanner_shadow_mode: "smcScanner.shadowMode",
+  smc_scanner_paper_trading_enabled: "smcScanner.paperTradingEnabled",
+  smc_scanner_max_open_trades: "smcScanner.maxOpenTrades",
+  smc_scanner_max_daily_trades: "smcScanner.maxDailyTrades",
+  smc_scanner_symbol_cooldown_minutes: "smcScanner.symbolCooldownMinutes",
+  futures_engine_enabled: "futuresEngine.enabled",
+  setup_dna_enabled: "setupDna.enabled",
+  trade_forensics_enabled: "tradeForensics.enabled",
+  backtesting_enabled: "backtesting.enabled",
+  rule_builder_enabled: "ruleBuilder.enabled",
 };
 
 function cloneDefaultConfig(): RuntimeConfig {
@@ -448,6 +548,7 @@ export class ConfigurationValidator {
           : String(value);
       }
       flat.scanner_enabled = "true";
+      flat.smc_scanner_enabled = String(defaults.smcScanner.enabled);
       flat.emergency_stop = String(defaults.risk.killSwitch);
     }
     return flat;
@@ -504,6 +605,7 @@ export class ConfigurationValidator {
           : value;
       }
       flat.scanner_enabled = true;
+      flat.smc_scanner_enabled = config.smcScanner.enabled;
       flat.emergency_stop = config.risk.killSwitch;
     }
     return flat;
@@ -518,11 +620,23 @@ export class ConfigurationValidator {
       }
     }
 
+    if (!["classic", "conservative_v2"].includes(config.scanner.mode)) {
+      throw new Error("scanner.mode must be classic or conservative_v2");
+    }
     if (config.scanner.minScoreWatchlist > config.scanner.minScoreTrade) {
       throw new Error("scanner.minScoreWatchlist cannot exceed scanner.minScoreTrade");
     }
     if (config.scanner.maxDailyTrades > config.scanner.maxWeeklyTrades) {
       throw new Error("scanner.maxDailyTrades cannot exceed scanner.maxWeeklyTrades");
+    }
+    if (config.smcScanner.minSmcScoreWatchlist > config.smcScanner.minSmcScoreTrade) {
+      throw new Error("smcScanner.minSmcScoreWatchlist cannot exceed smcScanner.minSmcScoreTrade");
+    }
+    if (config.smcScanner.maxOpenTrades < 0 || config.smcScanner.maxDailyTrades < 0) {
+      throw new Error("smcScanner trade limits cannot be negative");
+    }
+    if (config.smcScanner.symbolCooldownMinutes > 0) {
+      config.smcScanner.symbolCooldownMs = config.smcScanner.symbolCooldownMinutes * 60_000;
     }
     if (config.signal.emaFastPeriod >= config.signal.emaSlowPeriod) {
       throw new Error("signal.emaFastPeriod must be below signal.emaSlowPeriod");

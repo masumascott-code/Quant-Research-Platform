@@ -11,15 +11,21 @@ import { PriceChart } from "@/components/market/price-chart";
 export default function Signals() {
   const [status, setStatus] = useState<GetSignalsStatus | "all">("active");
   const [direction, setDirection] = useState<GetSignalsDirection | "all">("all");
+  const [source, setSource] = useState<"all" | "TECHNICAL" | "SMC">("all");
 
   const { data: signals, isLoading } = useGetSignals(
     { 
       status: status !== "all" ? status : undefined, 
-      direction: direction !== "all" ? direction : undefined 
+      direction: direction !== "all" ? direction : undefined,
+      source: source !== "all" ? source : undefined,
     },
     {
       query: {
-        queryKey: getGetSignalsQueryKey({ status: status !== "all" ? status : undefined, direction: direction !== "all" ? direction : undefined }),
+        queryKey: getGetSignalsQueryKey({
+          status: status !== "all" ? status : undefined,
+          direction: direction !== "all" ? direction : undefined,
+          source: source !== "all" ? source : undefined,
+        }),
         refetchInterval: 30000
       }
     }
@@ -37,6 +43,17 @@ export default function Signals() {
         </div>
         
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+          <Select value={source} onValueChange={(v: "all" | "TECHNICAL" | "SMC") => setSource(v)}>
+            <SelectTrigger className="w-full font-mono text-sm bg-card sm:w-[170px]">
+              <SelectValue placeholder="Source" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">ALL SIGNALS</SelectItem>
+              <SelectItem value="TECHNICAL">TECHNICAL SIGNALS</SelectItem>
+              <SelectItem value="SMC">SMC SIGNALS</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Select value={status} onValueChange={(v: GetSignalsStatus | "all") => setStatus(v)}>
             <SelectTrigger className="w-full font-mono text-sm bg-card sm:w-[140px]">
               <SelectValue placeholder="Status" />
@@ -98,6 +115,7 @@ export default function Signals() {
                       <Badge variant="outline" className={`font-mono ${signal.direction === 'LONG' ? 'text-success border-success/30 bg-success/10' : 'text-destructive border-destructive/30 bg-destructive/10'}`}>
                         {signal.direction}
                       </Badge>
+                      <SourceBadge item={signal} />
                     </CardTitle>
                     <div className="text-xs font-mono text-muted-foreground mt-1">
                       {new Date(signal.createdAt).toLocaleString()}
@@ -115,10 +133,16 @@ export default function Signals() {
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs font-mono">
                     <span className="text-muted-foreground">SCORE</span>
-                    <span>{signal.score}/100</span>
-                  </div>
-                  <Progress value={signal.score} className="h-1.5" />
+                  <span>{signal.score}/100</span>
                 </div>
+                <Progress value={signal.score} className="h-1.5" />
+                {signal.source === "SMC" && (
+                  <div className="flex items-center justify-between text-xs font-mono text-muted-foreground">
+                    <span>{signal.strategyLabel ?? "SMC"}</span>
+                    <span>SMC {signal.smcScore ?? signal.score}</span>
+                  </div>
+                )}
+              </div>
 
                 <PriceChart
                   symbol={signal.symbol}
@@ -159,5 +183,14 @@ export default function Signals() {
         </div>
       )}
     </div>
+  );
+}
+
+function SourceBadge({ item }: { item: any }) {
+  const isSmc = item.source === "SMC" || item.scannerType === "SMC_SCANNER";
+  return (
+    <Badge variant="outline" className={`font-mono text-[10px] ${isSmc ? "border-cyan-400/40 bg-cyan-400/10 text-cyan-300" : "border-muted-foreground/30 text-muted-foreground"}`}>
+      {isSmc ? item.badge ?? "SMC" : "TECH"}
+    </Badge>
   );
 }

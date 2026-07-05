@@ -11,7 +11,7 @@ router.get("/", async (req, res) => {
   await reconcileSignalStatuses();
 
   const limit = Math.min(Number(req.query.limit) || 50, 200);
-  const { status, direction } = req.query;
+  const { status, direction, source, scannerType } = req.query;
 
   const conditions = [];
   if (status && ["pending", "active", "expired", "traded"].includes(status as string)) {
@@ -19,6 +19,12 @@ router.get("/", async (req, res) => {
   }
   if (direction && ["LONG", "SHORT"].includes(direction as string)) {
     conditions.push(eq(signalsTable.direction, direction as string));
+  }
+  if (source && ["TECHNICAL", "SMC"].includes(source as string)) {
+    conditions.push(eq(signalsTable.source, source as string));
+  }
+  if (scannerType && ["TECHNICAL_SCANNER", "SMC_SCANNER"].includes(scannerType as string)) {
+    conditions.push(eq(signalsTable.scannerType, scannerType as string));
   }
 
   const signals = await db
@@ -68,6 +74,13 @@ function formatSignal(s: any) {
     id: s.id,
     symbol: s.symbol,
     direction: s.direction,
+    source: s.source ?? "TECHNICAL",
+    scannerType: s.scannerType ?? "TECHNICAL_SCANNER",
+    strategyType: s.strategyType ?? "TECHNICAL",
+    strategyLabel: s.strategyLabel,
+    badge: s.badge,
+    smcScore: s.smcScore ? Number(s.smcScore) : null,
+    smcDetails: s.smcDetails ?? null,
     score: Number(s.score),
     grade: s.grade,
     entryPrice: Number(s.entryPrice),

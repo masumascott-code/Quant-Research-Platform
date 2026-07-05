@@ -18,6 +18,7 @@ export const AuthRole = {
 } as const;
 
 export interface AuthUser {
+  userId?: number;
   username: string;
   role: AuthRole;
 }
@@ -25,6 +26,35 @@ export interface AuthUser {
 export interface LoginInput {
   username: string;
   password: string;
+}
+
+export interface RegisterInput {
+  email: string;
+  /**
+     * @minLength 3
+     * @maxLength 32
+     * @pattern ^[a-zA-Z0-9._-]+$
+     */
+  username: string;
+  /**
+     * @minLength 12
+     * @maxLength 1024
+     */
+  password: string;
+}
+
+export type RegistrationStatus = typeof RegistrationStatus[keyof typeof RegistrationStatus];
+
+
+export const RegistrationStatus = {
+  pending: 'pending',
+  active: 'active',
+} as const;
+
+export interface RegisterResult {
+  success: boolean;
+  status: RegistrationStatus;
+  message: string;
 }
 
 export type AuthLoginResultTokenType = typeof AuthLoginResultTokenType[keyof typeof AuthLoginResultTokenType];
@@ -45,10 +75,63 @@ export interface CurrentUserResponse {
   user: AuthUser;
 }
 
+export type AppUserStatus = typeof AppUserStatus[keyof typeof AppUserStatus];
+
+
+export const AppUserStatus = {
+  pending: 'pending',
+  active: 'active',
+  disabled: 'disabled',
+} as const;
+
+export interface AppUserAdminView {
+  id: number;
+  email: string;
+  username: string;
+  role: AuthRole;
+  status: AppUserStatus;
+  createdAt: string;
+  updatedAt: string;
+  /** @nullable */
+  approvedAt?: string | null;
+  /** @nullable */
+  approvedBy?: string | null;
+  /** @nullable */
+  lastLoginAt?: string | null;
+}
+
+export interface AdminUserListResponse {
+  users: AppUserAdminView[];
+}
+
+export interface AdminUserResponse {
+  user: AppUserAdminView;
+}
+
 export interface ActionResult {
   success: boolean;
   message: string;
 }
+
+export interface ErrorResponse {
+  error: string;
+}
+
+export type SignalSource = typeof SignalSource[keyof typeof SignalSource];
+
+
+export const SignalSource = {
+  TECHNICAL: 'TECHNICAL',
+  SMC: 'SMC',
+} as const;
+
+export type ScannerType = typeof ScannerType[keyof typeof ScannerType];
+
+
+export const ScannerType = {
+  TECHNICAL_SCANNER: 'TECHNICAL_SCANNER',
+  SMC_SCANNER: 'SMC_SCANNER',
+} as const;
 
 export interface ScannerStatus {
   running: boolean;
@@ -62,6 +145,31 @@ export interface ScannerStatus {
   nextScanIn?: number | null;
 }
 
+export interface SmcScannerStatus {
+  running: boolean;
+  enabled: boolean;
+  /** @nullable */
+  lastScanAt: string | null;
+  /** @nullable */
+  nextScanIn: number | null;
+}
+
+export interface SmcScannerActionResult {
+  success: boolean;
+  message: string;
+  status: SmcScannerStatus;
+}
+
+export interface PortfolioSummary {
+  currency: string;
+  equity: number;
+  availableBalance: number;
+  usedMargin: number;
+  freeMargin: number;
+  openExposure: number;
+  riskUsagePercent: number;
+}
+
 export interface ScannerDashboard {
   scannerRunning: boolean;
   totalCoins: number;
@@ -72,15 +180,7 @@ export interface ScannerDashboard {
   todayPnl: number;
   totalPnl: number;
   winRate: number;
-  portfolio?: {
-    currency: string;
-    equity: number;
-    availableBalance: number;
-    usedMargin: number;
-    freeMargin: number;
-    openExposure: number;
-    riskUsagePercent: number;
-  };
+  portfolio?: PortfolioSummary;
   /** @nullable */
   lastScanAt?: string | null;
 }
@@ -97,6 +197,26 @@ export interface Coin {
   volume24h?: number | null;
   /** @nullable */
   priceChangePercent?: number | null;
+}
+
+export type MarketSnapshotDecisionDecision = typeof MarketSnapshotDecisionDecision[keyof typeof MarketSnapshotDecisionDecision];
+
+
+export const MarketSnapshotDecisionDecision = {
+  ACCEPTED: 'ACCEPTED',
+  REJECTED: 'REJECTED',
+  SKIPPED: 'SKIPPED',
+} as const;
+
+export interface MarketSnapshotDecision {
+  decision: MarketSnapshotDecisionDecision;
+  scoreAvailable: boolean;
+  finalScore: number;
+  technicalScore: number;
+  strategy: string;
+  /** @nullable */
+  reason: string | null;
+  createdAt: string;
 }
 
 export interface MarketSnapshot {
@@ -116,6 +236,192 @@ export interface MarketSnapshot {
   /** @nullable */
   trend?: string | null;
   scannedAt?: string;
+  latestDecision?: MarketSnapshotDecision | null;
+}
+
+export interface ComponentScores {[key: string]: number | null}
+
+export interface DiagnosticDetails { [key: string]: unknown }
+
+export type ScannerDiagnosticDecisionDirection = typeof ScannerDiagnosticDecisionDirection[keyof typeof ScannerDiagnosticDecisionDirection];
+
+
+export const ScannerDiagnosticDecisionDirection = {
+  LONG: 'LONG',
+  SHORT: 'SHORT',
+} as const;
+
+export type ScannerDiagnosticDecisionDecision = typeof ScannerDiagnosticDecisionDecision[keyof typeof ScannerDiagnosticDecisionDecision];
+
+
+export const ScannerDiagnosticDecisionDecision = {
+  ACCEPTED: 'ACCEPTED',
+  REJECTED: 'REJECTED',
+  SKIPPED: 'SKIPPED',
+} as const;
+
+export interface ShortProtectionDiagnostic {
+  /** @nullable */
+  priceChangePercent?: number | null;
+  /** @nullable */
+  distanceFromEMA20?: number | null;
+  /** @nullable */
+  distanceFromEMA50?: number | null;
+  isShortOverextended?: boolean;
+  hasBearishRetest?: boolean;
+  /** @nullable */
+  marketRegime?: string | null;
+  /** @nullable */
+  btcTrendBias?: string | null;
+  shortProtectionWouldBlock?: boolean;
+  shortProtectionReasons?: string[];
+}
+
+export interface ScannerDiagnosticDecision {
+  id: number;
+  symbol: string;
+  direction: ScannerDiagnosticDecisionDirection;
+  source: SignalSource;
+  scannerType: ScannerType;
+  strategyType?: string;
+  /** @nullable */
+  strategyLabel?: string | null;
+  /** @nullable */
+  badge?: string | null;
+  /** @nullable */
+  smcScore?: number | null;
+  smcDetails?: DiagnosticDetails | null;
+  componentScores?: ComponentScores | null;
+  diagnosticDetails?: DiagnosticDetails | null;
+  /** @nullable */
+  rejectionStage?: string | null;
+  /** @nullable */
+  rejectionReason?: string | null;
+  /** @nullable */
+  blockedReason?: string | null;
+  shortProtection?: ShortProtectionDiagnostic | null;
+  shortProtectionWouldBlock?: boolean;
+  shortProtectionReasons?: string[];
+  decision: ScannerDiagnosticDecisionDecision;
+  strategy: string;
+  finalScore: number;
+  technicalScore: number;
+  confidence: number;
+  marketRegime: string;
+  /** @nullable */
+  opportunityRank?: number | null;
+  riskGrade: string;
+  reasons: string[];
+  riskSummary: string[];
+  scansToday: number;
+  scoreAvailable: boolean;
+  createdAt: string;
+}
+
+export interface ScannerDiagnosticSnapshot {
+  id: number;
+  symbol: string;
+  price: number;
+  priceChangePercent: number;
+  volume24h: number;
+  rvol: number;
+  rank: number;
+  listType: string;
+  /** @nullable */
+  ema20?: number | null;
+  /** @nullable */
+  ema50?: number | null;
+  /** @nullable */
+  atr14?: number | null;
+  /** @nullable */
+  trend?: string | null;
+  scannedAt: string;
+}
+
+export type ScannerDiagnosticsScanActivity = {
+  /** @nullable */
+  latestSnapshotAt: string | null;
+  snapshotsLast10m: number;
+};
+
+export interface ReasonCount {
+  reason: string;
+  count: number;
+}
+
+export interface ScannerDiagnosticsToday {
+  totalDecisions: number;
+  accepted: number;
+  rejected: number;
+  skipped: number;
+  averageFinalScore: number;
+  averageConfidence: number;
+  topRejectedReasons: ReasonCount[];
+}
+
+export interface ScannerDiagnosticsPartitions {
+  accepted: ScannerDiagnosticDecision[];
+  skipped: ScannerDiagnosticDecision[];
+  rejected: ScannerDiagnosticDecision[];
+}
+
+export interface ScannerDiagnostics {
+  running: boolean;
+  /** @nullable */
+  lastScanAt: string | null;
+  /** @nullable */
+  nextScanIn: number | null;
+  diagnosticsAvailable: boolean;
+  diagnosticsFrom: string;
+  message?: string;
+  scanActivity: ScannerDiagnosticsScanActivity;
+  today: ScannerDiagnosticsToday;
+  recentDecisions: ScannerDiagnosticDecision[];
+  partitions?: ScannerDiagnosticsPartitions;
+  recentSnapshots: ScannerDiagnosticSnapshot[];
+}
+
+export interface StageCount {
+  stage: string;
+  count: number;
+}
+
+export interface DirectionCounts {
+  LONG: number;
+  SHORT: number;
+}
+
+export interface ScorePair {
+  technicalScore: number;
+  finalScore: number;
+}
+
+export interface ScoreByDirection {
+  LONG: ScorePair;
+  SHORT: ScorePair;
+}
+
+export interface ScannerDiagnosticsSummary {
+  diagnosticsAvailable: boolean;
+  hours: number;
+  from: string;
+  totalDiagnostics: number;
+  acceptedCount: number;
+  rejectedCount: number;
+  skippedCount: number;
+  averageTechnicalScore: number;
+  averageFinalScore: number;
+  rejectionStageBreakdown: StageCount[];
+  rejectionReasonBreakdown: ReasonCount[];
+  directionCounts: DirectionCounts;
+  longDiagnosticsCount: number;
+  shortDiagnosticsCount: number;
+  shortWouldBlockCount: number;
+  topShortProtectionReasons: ReasonCount[];
+  averageScoreByDirection: ScoreByDirection;
+  acceptedByDirection: DirectionCounts;
+  rejectedByDirection: DirectionCounts;
+  message?: string;
 }
 
 export type SignalDirection = typeof SignalDirection[keyof typeof SignalDirection];
@@ -148,6 +454,16 @@ export interface Signal {
   id: number;
   symbol: string;
   direction: SignalDirection;
+  source?: SignalSource;
+  scannerType?: ScannerType;
+  strategyType?: string;
+  /** @nullable */
+  strategyLabel?: string | null;
+  /** @nullable */
+  badge?: string | null;
+  /** @nullable */
+  smcScore?: number | null;
+  smcDetails?: DiagnosticDetails | null;
   score: number;
   grade: SignalGrade;
   entryPrice: number;
@@ -209,6 +525,16 @@ export interface PaperTrade {
   tradeId: string;
   symbol: string;
   direction: PaperTradeDirection;
+  source?: SignalSource;
+  scannerType?: ScannerType;
+  strategyType?: string;
+  /** @nullable */
+  strategyLabel?: string | null;
+  /** @nullable */
+  badge?: string | null;
+  /** @nullable */
+  smcScore?: number | null;
+  smcDetails?: DiagnosticDetails | null;
   entryPrice: number;
   stopLoss: number;
   /** @nullable */
@@ -247,6 +573,56 @@ export interface PaperTrade {
 export interface CloseTradeInput {
   exitPrice: number;
   exitReason: string;
+}
+
+export interface DirectionTradeSummary {
+  closedTradeCount: number;
+  winRate: number;
+  averagePnl: number;
+  averageScore: number;
+  averageDurationMinutes: number;
+}
+
+export type SymbolPerformanceSummaryDirection = typeof SymbolPerformanceSummaryDirection[keyof typeof SymbolPerformanceSummaryDirection];
+
+
+export const SymbolPerformanceSummaryDirection = {
+  LONG: 'LONG',
+  SHORT: 'SHORT',
+} as const;
+
+export interface SymbolPerformanceSummary {
+  symbol: string;
+  direction: SymbolPerformanceSummaryDirection;
+  totalPnl: number;
+  averagePnl: number;
+  averageScore: number;
+  averageDurationMinutes: number;
+  winRate: number;
+  count: number;
+}
+
+export type DirectionPerformanceSummaryByDirection = {
+  LONG: DirectionTradeSummary;
+  SHORT: DirectionTradeSummary;
+};
+
+export interface DirectionPerformanceSummary {
+  days: number;
+  from: string;
+  closedLongTradeCount: number;
+  closedShortTradeCount: number;
+  longWinRate: number;
+  shortWinRate: number;
+  averageLongPnl: number;
+  averageShortPnl: number;
+  averageLongScore: number;
+  averageShortScore: number;
+  averageLongDurationMinutes: number;
+  averageShortDurationMinutes: number;
+  bestSymbols: SymbolPerformanceSummary[];
+  worstSymbols: SymbolPerformanceSummary[];
+  byDirection: DirectionPerformanceSummaryByDirection;
 }
 
 export interface PerformanceStats {
@@ -382,6 +758,28 @@ export interface WeeklyReport {
   improvements: string[];
 }
 
+export type ListAdminUsersParams = {
+/**
+ * Defaults to pending.
+ */
+status?: ListAdminUsersStatus;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+};
+
+export type ListAdminUsersStatus = typeof ListAdminUsersStatus[keyof typeof ListAdminUsersStatus];
+
+
+export const ListAdminUsersStatus = {
+  pending: 'pending',
+  active: 'active',
+  disabled: 'disabled',
+  all: 'all',
+} as const;
+
 export type GetTopGainersParams = {
 limit?: number;
 };
@@ -390,9 +788,31 @@ export type GetTopLosersParams = {
 limit?: number;
 };
 
+export type GetScannerDiagnosticsParams = {
+/**
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: number;
+source?: SignalSource;
+scannerType?: ScannerType;
+};
+
+export type GetScannerDiagnosticsSummaryParams = {
+/**
+ * @minimum 1
+ * @maximum 720
+ */
+hours?: number;
+source?: SignalSource;
+scannerType?: ScannerType;
+};
+
 export type GetSignalsParams = {
 status?: GetSignalsStatus;
 direction?: GetSignalsDirection;
+source?: SignalSource;
+scannerType?: ScannerType;
 limit?: number;
 };
 
@@ -418,6 +838,8 @@ export type GetTradesParams = {
 status?: GetTradesStatus;
 direction?: GetTradesDirection;
 result?: GetTradesResult;
+source?: SignalSource;
+scannerType?: ScannerType;
 limit?: number;
 };
 
@@ -451,6 +873,14 @@ days?: number;
 };
 
 export type GetPnlCurveParams = {
+days?: number;
+};
+
+export type GetDirectionPerformanceParams = {
+/**
+ * @minimum 1
+ * @maximum 3650
+ */
 days?: number;
 };
 

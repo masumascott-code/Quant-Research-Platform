@@ -6,6 +6,7 @@ import {
 } from "@workspace/db";
 import { desc, gte } from "drizzle-orm";
 import { logger } from "../../lib/logger";
+import { configService } from "../config";
 import type { ScannerDecisionResult, ScannerQualityReport, ScannerSignalGrade } from "./types";
 
 export class ScannerDecisionRepository {
@@ -14,10 +15,26 @@ export class ScannerDecisionRepository {
       await db.insert(scannerDecisionsTable).values({
         symbol: decision.context.symbol,
         direction: decision.context.direction,
-        decision: decision.accepted ? "ACCEPTED" : "REJECTED",
+        decision: decision.scoreDecision === "TRADE_ELIGIBLE"
+          ? "ACCEPTED"
+          : decision.scoreDecision === "WATCHLIST"
+            ? "WATCHLIST"
+            : "REJECTED",
         strategy: decision.strategy,
+        componentScores: decision.componentScores,
+        diagnosticDetails: {
+          scannerMode: decision.scannerMode,
+          tradeGrade: decision.tradeGrade,
+          scoreDecision: decision.scoreDecision,
+          scoreDecisionReason: decision.scoreDecisionReason,
+          scoreBreakdown: decision.scoreBreakdown,
+          shortProtection: decision.shortProtection ?? null,
+        },
+        rejectionStage: decision.rejectionStage,
+        rejectionReason: decision.rejectionReason,
+        blockedReason: decision.blockedReason,
         finalScore: String(decision.finalScore),
-        technicalScore: String(decision.scoreBreakdown.technicalScore),
+        technicalScore: String(decision.technicalScore),
         confidence: String(decision.confidence),
         marketRegime: decision.marketRegime,
         opportunityRank: decision.opportunityRank == null ? null : String(decision.opportunityRank),
@@ -42,9 +59,9 @@ export class ScannerDecisionRepository {
       await db.insert(signalExplanationsTable).values({
         symbol: decision.context.symbol,
         direction: decision.context.direction,
-        signalGrade: decision.signalGrade,
+        signalGrade: decision.tradeGrade,
         whySelected: decision.explanation.whySelected,
-        whyRejected: decision.explanation.whyRejected,
+        whyRejected: decision.scoreDecision === "REJECTED" ? decision.reasons : decision.explanation.whyRejected,
         confidenceFactors: decision.explanation.confidenceFactors,
         riskFactors: decision.explanation.riskFactors,
         marketContext: decision.explanation.marketContext,
@@ -119,6 +136,12 @@ export class ScannerDecisionRepository {
 
   private gradeFromScore(score: number, rejected: boolean): ScannerSignalGrade {
     if (rejected) return "Rejected";
+    if (configService.getSync().scanner.mode === "conservative_v2") {
+      if (score >= 90) return "A+";
+      if (score >= 85) return "A";
+      if (score >= 80) return "B";
+      return "C";
+    }
     if (score >= 95) return "A+";
     if (score >= 90) return "A";
     if (score >= 80) return "B";

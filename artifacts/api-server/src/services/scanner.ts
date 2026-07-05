@@ -12,7 +12,7 @@ import { logger } from "../lib/logger";
 import { configService, type RuntimeConfig, type ScannerRuntimeConfig } from "../core/config";
 import { scannerDecisionEngine } from "../core/scanner";
 import { tradeService } from "../core/trading";
-import { analyzeForLong, analyzeForShort, CandleData } from "./signal-engine";
+import { analyzeForLong, analyzeForShort, diagnoseTechnicalSetup, CandleData } from "./signal-engine";
 import { Telegram } from "./telegram";
 import { riskManager } from "./risk-manager";
 
@@ -266,13 +266,23 @@ export class ScannerService {
       // Pre-filter with quick RVOL check on 15m
       const candles15m = await this.fetchCandles(symbol, "15m", config.candles15mLimit, config);
       if (candles15m.length < config.minCandles15m) {
-        await this.saveScannerDiagnostic(symbol, direction, "Insufficient 15m candle history", "Pre-filter");
+        await this.saveScannerDiagnostic(symbol, direction, "Insufficient 15m candle history", "Pre-filter", {
+          rejectionStage: "Pre-filter",
+          rejectionReason: "Insufficient 15m candle history",
+        });
         return;
       }
 
+      const shortProtection = direction === "SHORT"
+        ? this.buildShortProtectionDiagnostic(Number(ticker.priceChangePercent), currentPrice, candles15m)
+        : undefined;
       const rvol = this.calculateRvol(candles15m, config.volumeLookback) ?? 1;
       if (rvol < config.minRvol) {
-        await this.saveScannerDiagnostic(symbol, direction, `RVOL below minimum (${rvol.toFixed(2)} < ${config.minRvol})`, "Pre-filter");
+        await this.saveScannerDiagnostic(symbol, direction, `RVOL below minimum (${rvol.toFixed(2)} < ${config.minRvol})`, "Pre-filter", {
+          rejectionStage: "Pre-filter",
+          rejectionReason: `RVOL below minimum (${rvol.toFixed(2)} < ${config.minRvol})`,
+          shortProtection,
+        });
         return;
       }
 
@@ -289,7 +299,27 @@ export class ScannerService {
         : analyzeForShort(symbol, candles15m, currentPrice, volume24h, mtf, runtimeConfig.signal);
 
       if (!analysis) {
-        await this.saveScannerDiagnostic(symbol, direction, `No qualifying ${direction} setup after technical checks`, "Technical Filter");
+        const technicalDiagnostic = diagnoseTechnicalSetup(candles15m, currentPrice, volume24h, direction, mtf, runtimeConfig.signal);
+        await this.saveScannerDiagnostic(symbol, direction, technicalDiagnostic.rejectionReason, "Technical Filter", {
+          rejectionStage: technicalDiagnostic.rejectionStage,
+          rejectionReason: technicalDiagnostic.rejectionReason,
+          finalScore: 0,
+          technicalScore: technicalDiagnostic.technicalScore,
+          componentScores: technicalDiagnostic.componentScores,
+          diagnosticDetails: {
+            ...technicalDiagnostic.details,
+            ema20: technicalDiagnostic.ema20,
+            ema50: technicalDiagnostic.ema50,
+            ema200: technicalDiagnostic.ema200,
+            atr14: technicalDiagnostic.atr14,
+            rvol: technicalDiagnostic.rvol,
+            hasRetest: technicalDiagnostic.hasRetest,
+            timeframeAlignment: technicalDiagnostic.timeframeAlignment,
+          },
+          shortProtection: direction === "SHORT"
+            ? this.buildShortProtectionDiagnostic(Number(ticker.priceChangePercent), currentPrice, candles15m, technicalDiagnostic.hasRetest)
+            : shortProtection,
+        });
         return;
       }
       const decision = await scannerDecisionEngine.decide({
@@ -297,6 +327,7 @@ export class ScannerService {
         direction,
         candles: candles15m,
         technicalSignal: analysis,
+        shortProtection,
       });
       if (!decision.accepted) {
         logger.info({ symbol, reasons: decision.reasons }, "Scanner decision rejected signal");
@@ -305,12 +336,12 @@ export class ScannerService {
       const decisionAnalysis: any = {
         ...analysis,
         score: decision.finalScore,
-        grade: decision.signalGrade,
-        reason: `${analysis.reason} | Strategy:${decision.strategy} | Market:${decision.marketRegime} | Confidence:${decision.confidence.toFixed(1)} | Final:${decision.finalScore.toFixed(1)}`,
+        grade: decision.tradeGrade,
+        reason: `${analysis.reason} | Strategy:${decision.strategy} | Market:${decision.marketRegime} | Confidence:${decision.confidence.toFixed(1)} | Final:${decision.finalScore.toFixed(1)} | ${decision.scoreDecisionReason}`,
         whyNow: `${analysis.whyNow} Market context: ${decision.marketRegime}, ${decision.context.session.session}, confidence ${decision.confidence.toFixed(1)}.`,
       };
 
-      if (decision.finalScore >= config.minScoreTrade) {
+      if (decision.scoreDecision === "TRADE_ELIGIBLE") {
         // A/A+ signal — try to open a trade
         const tradeLimitCheck = await this.checkTradingLimits();
         if (!tradeLimitCheck.allowed) {
@@ -326,6 +357,19 @@ export class ScannerService {
             details: tradeLimitCheck.details,
             signalId: newSignal.id,
           }, "Active signal saved without paper trade");
+          await this.saveScannerDiagnostic(symbol, direction, tradeLimitCheck.reason, "Trade Block", {
+            decision: "SKIPPED",
+            rejectionStage: "Trade Block",
+            blockedReason: tradeLimitCheck.reason,
+            finalScore: decision.finalScore,
+            technicalScore: decision.scoreBreakdown.technicalScore,
+            confidence: decision.confidence,
+            marketRegime: decision.marketRegime,
+            riskGrade: decision.context.riskGrade,
+            componentScores: decision.componentScores,
+            diagnosticDetails: { tradingLimitDetails: tradeLimitCheck.details },
+            shortProtection: decision.shortProtection,
+          });
           return;
         }
 
@@ -341,6 +385,18 @@ export class ScannerService {
             reason: riskCheck.reason,
             signalId: newSignal.id,
           }, "Active signal saved without paper trade");
+          await this.saveScannerDiagnostic(symbol, direction, riskCheck.reason, "Trade Block", {
+            decision: "SKIPPED",
+            rejectionStage: "Trade Block",
+            blockedReason: riskCheck.reason,
+            finalScore: decision.finalScore,
+            technicalScore: decision.scoreBreakdown.technicalScore,
+            confidence: decision.confidence,
+            marketRegime: decision.marketRegime,
+            riskGrade: decision.context.riskGrade,
+            componentScores: decision.componentScores,
+            shortProtection: decision.shortProtection,
+          });
           return;
         }
 
@@ -356,7 +412,7 @@ export class ScannerService {
         });
         await this.openPaperTrade(newSignal, decisionAnalysis);
 
-      } else if (decision.finalScore >= config.minScoreWatchlist) {
+      } else if (decision.scoreDecision === "WATCHLIST") {
         // Near-miss — add to watchlist
         await this.addToWatchlist(symbol, decisionAnalysis);
       }
@@ -518,11 +574,15 @@ export class ScannerService {
           : analyzeForShort(item.symbol, candles15m, currentPrice, volume24h, mtf, runtimeConfig.signal);
 
         if (!analysis) continue;
+        const shortProtection = item.direction === "SHORT"
+          ? this.buildShortProtectionDiagnostic(Number(ticker.priceChangePercent), currentPrice, candles15m, analysis.retestScore > 0)
+          : undefined;
         const decision = await scannerDecisionEngine.decide({
           symbol: item.symbol,
           direction: item.direction as "LONG" | "SHORT",
           candles: candles15m,
           technicalSignal: analysis,
+          shortProtection,
         });
         if (!decision.accepted) {
           logger.info({ symbol: item.symbol, reasons: decision.reasons }, "Watchlist scanner decision rejected promotion");
@@ -531,8 +591,8 @@ export class ScannerService {
         const decisionAnalysis: any = {
           ...analysis,
           score: decision.finalScore,
-          grade: decision.signalGrade,
-          reason: `${analysis.reason} | Strategy:${decision.strategy} | Market:${decision.marketRegime} | Confidence:${decision.confidence.toFixed(1)} | Final:${decision.finalScore.toFixed(1)}`,
+          grade: decision.tradeGrade,
+          reason: `${analysis.reason} | Strategy:${decision.strategy} | Market:${decision.marketRegime} | Confidence:${decision.confidence.toFixed(1)} | Final:${decision.finalScore.toFixed(1)} | ${decision.scoreDecisionReason}`,
           whyNow: `${analysis.whyNow} Market context: ${decision.marketRegime}, ${decision.context.session.session}, confidence ${decision.confidence.toFixed(1)}.`,
         };
 
@@ -549,7 +609,7 @@ export class ScannerService {
           reason: decisionAnalysis.reason,
         }).where(eq(watchlistTable.id, item.id));
 
-        if (decision.finalScore >= config.minScoreTrade) {
+        if (decision.scoreDecision === "TRADE_ELIGIBLE") {
           // Promoted from watchlist!
           await db.update(watchlistTable).set({ isActive: false, promoted: true }).where(eq(watchlistTable.id, item.id));
           logger.info({ symbol: item.symbol, score: decision.finalScore }, "Watchlist item promoted to signal");
@@ -591,6 +651,25 @@ export class ScannerService {
               },
               signalId: newSignal.id,
             }, "Watchlist promotion signal saved without paper trade");
+            await this.saveScannerDiagnostic(item.symbol, item.direction as "LONG" | "SHORT", riskBlocked ? riskCheck.reason : tradeLimitCheck.reason, "Trade Block", {
+              decision: "SKIPPED",
+              rejectionStage: "Trade Block",
+              blockedReason: riskBlocked ? riskCheck.reason : tradeLimitCheck.reason,
+              finalScore: decision.finalScore,
+              technicalScore: decision.scoreBreakdown.technicalScore,
+              confidence: decision.confidence,
+              marketRegime: decision.marketRegime,
+              riskGrade: decision.context.riskGrade,
+              componentScores: decision.componentScores,
+              diagnosticDetails: {
+                riskAllowed: riskCheck.allowed,
+                riskReason: riskCheck.reason,
+                tradingLimitAllowed: tradeLimitCheck.allowed,
+                tradingLimitReason: tradeLimitCheck.reason,
+                tradingLimitDetails: tradeLimitCheck.details,
+              },
+              shortProtection: decision.shortProtection,
+            });
           }
         }
         await sleep(config.watchlistCheckCooldownMs);
@@ -636,19 +715,103 @@ export class ScannerService {
     return { allowed: true, reason: "OK" };
   }
 
-  private async saveScannerDiagnostic(symbol: string, direction: "LONG" | "SHORT", reason: string, strategy: string) {
+  private buildShortProtectionDiagnostic(
+    priceChangePercent: number,
+    currentPrice: number,
+    candles15m: CandleData[],
+    hasBearishRetestOverride?: boolean,
+  ) {
+    const config = configService.getSync().shortProtection;
+    const closes = candles15m.map((candle) => candle.close);
+    const ema20 = latestEma(closes, configService.getSync().signal.emaFastPeriod);
+    const ema50 = latestEma(closes, configService.getSync().signal.emaSlowPeriod);
+    const distanceFromEMA20 = ema20 > 0 ? (currentPrice - ema20) / ema20 : null;
+    const distanceFromEMA50 = ema50 > 0 ? (currentPrice - ema50) / ema50 : null;
+    const hasBearishRetest = hasBearishRetestOverride ?? hasRecentBearishRetest(candles15m, ema20);
+    const isShortOverextended = Boolean(
+      distanceFromEMA20 != null
+      && distanceFromEMA50 != null
+      && (
+        distanceFromEMA20 <= -Math.abs(config.maxShortExtensionFromEMA20)
+        || distanceFromEMA50 <= -Math.abs(config.maxShortExtensionFromEMA50)
+      )
+    );
+    const reasons: string[] = [];
+
+    if (config.requireShortRetest && !hasBearishRetest) {
+      reasons.push("No bearish retest after breakdown");
+    }
+    if (distanceFromEMA20 != null && distanceFromEMA20 <= -Math.abs(config.maxShortExtensionFromEMA20)) {
+      reasons.push(`Price is too far below EMA20 (${(distanceFromEMA20 * 100).toFixed(2)}%)`);
+    }
+    if (distanceFromEMA50 != null && distanceFromEMA50 <= -Math.abs(config.maxShortExtensionFromEMA50)) {
+      reasons.push(`Price is too far below EMA50 (${(distanceFromEMA50 * 100).toFixed(2)}%)`);
+    }
+    if (Number.isFinite(priceChangePercent) && priceChangePercent <= config.maxNegative24hMoveForFreshShort) {
+      reasons.push(`24h move is already heavily negative (${priceChangePercent.toFixed(2)}%)`);
+    }
+
+    return {
+      priceChangePercent: Number.isFinite(priceChangePercent) ? priceChangePercent : null,
+      distanceFromEMA20,
+      distanceFromEMA50,
+      isShortOverextended,
+      hasBearishRetest,
+      marketRegime: null,
+      btcTrendBias: null,
+      shortProtectionWouldBlock: config.enabled && reasons.length > 0,
+      shortProtectionReasons: reasons,
+      diagnosticOnly: config.diagnosticOnly,
+    };
+  }
+
+  private async saveScannerDiagnostic(
+    symbol: string,
+    direction: "LONG" | "SHORT",
+    reason: string,
+    strategy: string,
+    options: {
+      decision?: "REJECTED" | "SKIPPED" | "ACCEPTED" | "WATCHLIST";
+      rejectionStage?: string | null;
+      rejectionReason?: string | null;
+      blockedReason?: string | null;
+      tradeGrade?: string | null;
+      scoreDecision?: string | null;
+      scoreDecisionReason?: string | null;
+      finalScore?: number;
+      technicalScore?: number;
+      confidence?: number;
+      marketRegime?: string;
+      riskGrade?: string;
+      componentScores?: unknown;
+      diagnosticDetails?: Record<string, unknown> | null;
+      shortProtection?: unknown;
+    } = {},
+  ) {
     try {
       await db.insert(scannerDecisionsTable).values({
         symbol,
         direction,
-        decision: "REJECTED",
+        decision: options.decision ?? "REJECTED",
         strategy,
-        finalScore: "0",
-        technicalScore: "0",
-        confidence: "0",
-        marketRegime: "UNQUALIFIED",
+        componentScores: options.componentScores,
+        diagnosticDetails: {
+          scannerMode: configService.getSync().scanner.mode,
+          tradeGrade: options.tradeGrade ?? gradeFromScore(options.finalScore ?? 0),
+          scoreDecision: options.scoreDecision ?? (options.decision === "ACCEPTED" ? "TRADE_ELIGIBLE" : options.decision ?? "REJECTED"),
+          scoreDecisionReason: options.scoreDecisionReason ?? options.rejectionReason ?? reason,
+          ...(options.diagnosticDetails ?? {}),
+          shortProtection: options.shortProtection ?? null,
+        },
+        rejectionStage: options.rejectionStage ?? strategy,
+        rejectionReason: options.rejectionReason ?? reason,
+        blockedReason: options.blockedReason ?? null,
+        finalScore: String(options.finalScore ?? 0),
+        technicalScore: String(options.technicalScore ?? 0),
+        confidence: String(options.confidence ?? 0),
+        marketRegime: options.marketRegime ?? "UNQUALIFIED",
         opportunityRank: null,
-        riskGrade: "LOW",
+        riskGrade: options.riskGrade ?? "LOW",
         reasons: [reason],
         riskSummary: [],
       });
@@ -657,6 +820,42 @@ export class ScannerService {
     }
   }
 
+}
+
+function latestEma(values: number[], period: number): number {
+  if (values.length === 0) return 0;
+  const k = 2 / (period + 1);
+  let ema = values.slice(0, Math.min(period, values.length)).reduce((sum, value) => sum + value, 0) / Math.min(period, values.length);
+  for (const value of values.slice(period)) {
+    ema = value * k + ema * (1 - k);
+  }
+  return ema;
+}
+
+function hasRecentBearishRetest(candles: CandleData[], ema20: number): boolean {
+  if (candles.length < 3 || ema20 <= 0) return false;
+  const recent = candles.slice(-6);
+  return recent.some((candle, index) => {
+    const next = recent[index + 1];
+    if (!next) return false;
+    const testedEma = Math.abs(candle.high - ema20) / ema20 <= 0.006 || Math.abs(candle.close - ema20) / ema20 <= 0.006;
+    const rejected = next.close < candle.close && next.close < ema20;
+    return testedEma && rejected;
+  });
+}
+
+function gradeFromScore(score: number): "A+" | "A" | "B" | "C" {
+  if (configService.getSync().scanner.mode === "conservative_v2") {
+    if (score >= 90) return "A+";
+    if (score >= 85) return "A";
+    if (score >= 80) return "B";
+    return "C";
+  }
+
+  if (score >= configService.getSync().scannerDecision.gradeAPlusThreshold) return "A+";
+  if (score >= configService.getSync().scannerDecision.gradeAThreshold) return "A";
+  if (score >= configService.getSync().scannerDecision.gradeBThreshold) return "B";
+  return "C";
 }
 
 function sleep(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)); }

@@ -5,14 +5,27 @@
  * Binance Futures Paper Trading Research Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { DiagnosticDetails } from './diagnosticDetails';
+import type { ScannerType } from './scannerType';
 import type { SignalDirection } from './signalDirection';
 import type { SignalGrade } from './signalGrade';
+import type { SignalSource } from './signalSource';
 import type { SignalStatus } from './signalStatus';
 
 export interface Signal {
   id: number;
   symbol: string;
   direction: SignalDirection;
+  source?: SignalSource;
+  scannerType?: ScannerType;
+  strategyType?: string;
+  /** @nullable */
+  strategyLabel?: string | null;
+  /** @nullable */
+  badge?: string | null;
+  /** @nullable */
+  smcScore?: number | null;
+  smcDetails?: DiagnosticDetails | null;
   score: number;
   grade: SignalGrade;
   entryPrice: number;

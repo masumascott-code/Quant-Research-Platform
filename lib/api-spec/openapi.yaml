@@ -265,6 +265,45 @@ paths:
               schema:
                 $ref: "#/components/schemas/ActionResult"
 
+  /scanner/smc/status:
+    get:
+      operationId: getSmcScannerStatus
+      tags: [scanner]
+      summary: Get SMC scanner status
+      responses:
+        "200":
+          description: SMC scanner status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmcScannerStatus"
+
+  /scanner/smc/start:
+    post:
+      operationId: startSmcScanner
+      tags: [scanner]
+      summary: Start the SMC scanner if enabled
+      responses:
+        "200":
+          description: SMC scanner start result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmcScannerActionResult"
+
+  /scanner/smc/stop:
+    post:
+      operationId: stopSmcScanner
+      tags: [scanner]
+      summary: Stop the SMC scanner
+      responses:
+        "200":
+          description: SMC scanner stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+
   /scanner/gainers:
     get:
       operationId: getTopGainers
@@ -322,6 +361,64 @@ paths:
                 items:
                   $ref: "#/components/schemas/Coin"
 
+  /scanner/diagnostics:
+    get:
+      operationId: getScannerDiagnostics
+      tags: [scanner]
+      summary: Get recent scanner diagnostic decisions
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 12
+            minimum: 1
+            maximum: 50
+        - name: source
+          in: query
+          schema:
+            $ref: "#/components/schemas/SignalSource"
+        - name: scannerType
+          in: query
+          schema:
+            $ref: "#/components/schemas/ScannerType"
+      responses:
+        "200":
+          description: Scanner diagnostics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScannerDiagnostics"
+
+  /scanner/diagnostics/summary:
+    get:
+      operationId: getScannerDiagnosticsSummary
+      tags: [scanner]
+      summary: Get scanner diagnostics summary
+      parameters:
+        - name: hours
+          in: query
+          schema:
+            type: integer
+            default: 24
+            minimum: 1
+            maximum: 720
+        - name: source
+          in: query
+          schema:
+            $ref: "#/components/schemas/SignalSource"
+        - name: scannerType
+          in: query
+          schema:
+            $ref: "#/components/schemas/ScannerType"
+      responses:
+        "200":
+          description: Scanner diagnostics summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScannerDiagnosticsSummary"
+
   /scanner/dashboard:
     get:
       operationId: getScannerDashboard
@@ -351,6 +448,14 @@ paths:
           schema:
             type: string
             enum: [LONG, SHORT]
+        - name: source
+          in: query
+          schema:
+            $ref: "#/components/schemas/SignalSource"
+        - name: scannerType
+          in: query
+          schema:
+            $ref: "#/components/schemas/ScannerType"
         - name: limit
           in: query
           schema:
@@ -423,6 +528,14 @@ paths:
           schema:
             type: string
             enum: [WIN, LOSS, BREAKEVEN]
+        - name: source
+          in: query
+          schema:
+            $ref: "#/components/schemas/SignalSource"
+        - name: scannerType
+          in: query
+          schema:
+            $ref: "#/components/schemas/ScannerType"
         - name: limit
           in: query
           schema:
@@ -594,6 +707,27 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PnlPoint"
+
+  /analytics/direction-performance:
+    get:
+      operationId: getDirectionPerformance
+      tags: [analytics]
+      summary: Get closed trade performance by direction
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 90
+            minimum: 1
+            maximum: 3650
+      responses:
+        "200":
+          description: Direction performance summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DirectionPerformanceSummary"
 
   /learning/reviews:
     get:
@@ -828,6 +962,14 @@ components:
         error:
           type: string
 
+    SignalSource:
+      type: string
+      enum: [TECHNICAL, SMC]
+
+    ScannerType:
+      type: string
+      enum: [TECHNICAL_SCANNER, SMC_SCANNER]
+
     ScannerStatus:
       type: object
       required: [running, lastScanAt, totalCoinsTracked, openTrades, dailyTrades, weeklyTrades]
@@ -846,6 +988,30 @@ components:
           type: integer
         nextScanIn:
           type: ["integer", "null"]
+
+    SmcScannerStatus:
+      type: object
+      required: [running, enabled, lastScanAt, nextScanIn]
+      properties:
+        running:
+          type: boolean
+        enabled:
+          type: boolean
+        lastScanAt:
+          type: ["string", "null"]
+        nextScanIn:
+          type: ["integer", "null"]
+
+    SmcScannerActionResult:
+      type: object
+      required: [success, message, status]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        status:
+          $ref: "#/components/schemas/SmcScannerStatus"
 
     ScannerDashboard:
       type: object
@@ -869,8 +1035,29 @@ components:
           type: number
         winRate:
           type: number
+        portfolio:
+          $ref: "#/components/schemas/PortfolioSummary"
         lastScanAt:
           type: ["string", "null"]
+
+    PortfolioSummary:
+      type: object
+      required: [currency, equity, availableBalance, usedMargin, freeMargin, openExposure, riskUsagePercent]
+      properties:
+        currency:
+          type: string
+        equity:
+          type: number
+        availableBalance:
+          type: number
+        usedMargin:
+          type: number
+        freeMargin:
+          type: number
+        openExposure:
+          type: number
+        riskUsagePercent:
+          type: number
 
     Coin:
       type: object
@@ -921,6 +1108,349 @@ components:
           type: ["string", "null"]
         scannedAt:
           type: string
+        latestDecision:
+          oneOf:
+            - $ref: "#/components/schemas/MarketSnapshotDecision"
+            - type: "null"
+
+    MarketSnapshotDecision:
+      type: object
+      required: [decision, scoreAvailable, finalScore, technicalScore, strategy, reason, createdAt]
+      properties:
+        decision:
+          type: string
+          enum: [ACCEPTED, REJECTED, SKIPPED]
+        scoreAvailable:
+          type: boolean
+        finalScore:
+          type: number
+        technicalScore:
+          type: number
+        strategy:
+          type: string
+        reason:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    ComponentScores:
+      type: object
+      additionalProperties:
+        type: ["number", "null"]
+
+    DiagnosticDetails:
+      type: object
+      additionalProperties: true
+
+    ScannerDiagnosticDecision:
+      type: object
+      required: [id, symbol, direction, source, scannerType, decision, strategy, finalScore, technicalScore, confidence, marketRegime, riskGrade, reasons, riskSummary, scansToday, scoreAvailable, createdAt]
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        direction:
+          type: string
+          enum: [LONG, SHORT]
+        source:
+          $ref: "#/components/schemas/SignalSource"
+        scannerType:
+          $ref: "#/components/schemas/ScannerType"
+        strategyType:
+          type: string
+        strategyLabel:
+          type: ["string", "null"]
+        badge:
+          type: ["string", "null"]
+        smcScore:
+          type: ["number", "null"]
+        smcDetails:
+          oneOf:
+            - $ref: "#/components/schemas/DiagnosticDetails"
+            - type: "null"
+        componentScores:
+          oneOf:
+            - $ref: "#/components/schemas/ComponentScores"
+            - type: "null"
+        diagnosticDetails:
+          oneOf:
+            - $ref: "#/components/schemas/DiagnosticDetails"
+            - type: "null"
+        rejectionStage:
+          type: ["string", "null"]
+        rejectionReason:
+          type: ["string", "null"]
+        blockedReason:
+          type: ["string", "null"]
+        shortProtection:
+          oneOf:
+            - $ref: "#/components/schemas/ShortProtectionDiagnostic"
+            - type: "null"
+        shortProtectionWouldBlock:
+          type: boolean
+        shortProtectionReasons:
+          type: array
+          items:
+            type: string
+        decision:
+          type: string
+          enum: [ACCEPTED, REJECTED, SKIPPED]
+        strategy:
+          type: string
+        finalScore:
+          type: number
+        technicalScore:
+          type: number
+        confidence:
+          type: number
+        marketRegime:
+          type: string
+        opportunityRank:
+          type: ["number", "null"]
+        riskGrade:
+          type: string
+        reasons:
+          type: array
+          items:
+            type: string
+        riskSummary:
+          type: array
+          items:
+            type: string
+        scansToday:
+          type: integer
+        scoreAvailable:
+          type: boolean
+        createdAt:
+          type: string
+
+    ShortProtectionDiagnostic:
+      type: object
+      properties:
+        priceChangePercent:
+          type: ["number", "null"]
+        distanceFromEMA20:
+          type: ["number", "null"]
+        distanceFromEMA50:
+          type: ["number", "null"]
+        isShortOverextended:
+          type: boolean
+        hasBearishRetest:
+          type: boolean
+        marketRegime:
+          type: ["string", "null"]
+        btcTrendBias:
+          type: ["string", "null"]
+        shortProtectionWouldBlock:
+          type: boolean
+        shortProtectionReasons:
+          type: array
+          items:
+            type: string
+
+    ScannerDiagnosticSnapshot:
+      type: object
+      required: [id, symbol, price, priceChangePercent, volume24h, rvol, rank, listType, scannedAt]
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        price:
+          type: number
+        priceChangePercent:
+          type: number
+        volume24h:
+          type: number
+        rvol:
+          type: number
+        rank:
+          type: integer
+        listType:
+          type: string
+        ema20:
+          type: ["number", "null"]
+        ema50:
+          type: ["number", "null"]
+        atr14:
+          type: ["number", "null"]
+        trend:
+          type: ["string", "null"]
+        scannedAt:
+          type: string
+
+    ScannerDiagnostics:
+      type: object
+      required: [running, lastScanAt, nextScanIn, diagnosticsAvailable, diagnosticsFrom, scanActivity, today, recentDecisions, recentSnapshots]
+      properties:
+        running:
+          type: boolean
+        lastScanAt:
+          type: ["string", "null"]
+        nextScanIn:
+          type: ["integer", "null"]
+        diagnosticsAvailable:
+          type: boolean
+        diagnosticsFrom:
+          type: string
+        message:
+          type: string
+        scanActivity:
+          type: object
+          required: [latestSnapshotAt, snapshotsLast10m]
+          properties:
+            latestSnapshotAt:
+              type: ["string", "null"]
+            snapshotsLast10m:
+              type: integer
+        today:
+          $ref: "#/components/schemas/ScannerDiagnosticsToday"
+        recentDecisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScannerDiagnosticDecision"
+        partitions:
+          $ref: "#/components/schemas/ScannerDiagnosticsPartitions"
+        recentSnapshots:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScannerDiagnosticSnapshot"
+
+    ScannerDiagnosticsToday:
+      type: object
+      required: [totalDecisions, accepted, rejected, skipped, averageFinalScore, averageConfidence, topRejectedReasons]
+      properties:
+        totalDecisions:
+          type: integer
+        accepted:
+          type: integer
+        rejected:
+          type: integer
+        skipped:
+          type: integer
+        averageFinalScore:
+          type: number
+        averageConfidence:
+          type: number
+        topRejectedReasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReasonCount"
+
+    ScannerDiagnosticsPartitions:
+      type: object
+      required: [accepted, skipped, rejected]
+      properties:
+        accepted:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScannerDiagnosticDecision"
+        skipped:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScannerDiagnosticDecision"
+        rejected:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScannerDiagnosticDecision"
+
+    ScannerDiagnosticsSummary:
+      type: object
+      required: [diagnosticsAvailable, hours, from, totalDiagnostics, acceptedCount, rejectedCount, skippedCount, averageTechnicalScore, averageFinalScore, rejectionStageBreakdown, rejectionReasonBreakdown, directionCounts, longDiagnosticsCount, shortDiagnosticsCount, shortWouldBlockCount, topShortProtectionReasons, averageScoreByDirection, acceptedByDirection, rejectedByDirection]
+      properties:
+        diagnosticsAvailable:
+          type: boolean
+        hours:
+          type: integer
+        from:
+          type: string
+        totalDiagnostics:
+          type: integer
+        acceptedCount:
+          type: integer
+        rejectedCount:
+          type: integer
+        skippedCount:
+          type: integer
+        averageTechnicalScore:
+          type: number
+        averageFinalScore:
+          type: number
+        rejectionStageBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/StageCount"
+        rejectionReasonBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReasonCount"
+        directionCounts:
+          $ref: "#/components/schemas/DirectionCounts"
+        longDiagnosticsCount:
+          type: integer
+        shortDiagnosticsCount:
+          type: integer
+        shortWouldBlockCount:
+          type: integer
+        topShortProtectionReasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReasonCount"
+        averageScoreByDirection:
+          $ref: "#/components/schemas/ScoreByDirection"
+        acceptedByDirection:
+          $ref: "#/components/schemas/DirectionCounts"
+        rejectedByDirection:
+          $ref: "#/components/schemas/DirectionCounts"
+        message:
+          type: string
+
+    ReasonCount:
+      type: object
+      required: [reason, count]
+      properties:
+        reason:
+          type: string
+        count:
+          type: integer
+
+    StageCount:
+      type: object
+      required: [stage, count]
+      properties:
+        stage:
+          type: string
+        count:
+          type: integer
+
+    DirectionCounts:
+      type: object
+      required: [LONG, SHORT]
+      properties:
+        LONG:
+          type: integer
+        SHORT:
+          type: integer
+
+    ScorePair:
+      type: object
+      required: [technicalScore, finalScore]
+      properties:
+        technicalScore:
+          type: number
+        finalScore:
+          type: number
+
+    ScoreByDirection:
+      type: object
+      required: [LONG, SHORT]
+      properties:
+        LONG:
+          $ref: "#/components/schemas/ScorePair"
+        SHORT:
+          $ref: "#/components/schemas/ScorePair"
+
 
     Signal:
       type: object
@@ -933,6 +1463,22 @@ components:
         direction:
           type: string
           enum: [LONG, SHORT]
+        source:
+          $ref: "#/components/schemas/SignalSource"
+        scannerType:
+          $ref: "#/components/schemas/ScannerType"
+        strategyType:
+          type: string
+        strategyLabel:
+          type: ["string", "null"]
+        badge:
+          type: ["string", "null"]
+        smcScore:
+          type: ["number", "null"]
+        smcDetails:
+          oneOf:
+            - $ref: "#/components/schemas/DiagnosticDetails"
+            - type: "null"
         score:
           type: number
         grade:
@@ -985,6 +1531,22 @@ components:
         direction:
           type: string
           enum: [LONG, SHORT]
+        source:
+          $ref: "#/components/schemas/SignalSource"
+        scannerType:
+          $ref: "#/components/schemas/ScannerType"
+        strategyType:
+          type: string
+        strategyLabel:
+          type: ["string", "null"]
+        badge:
+          type: ["string", "null"]
+        smcScore:
+          type: ["number", "null"]
+        smcDetails:
+          oneOf:
+            - $ref: "#/components/schemas/DiagnosticDetails"
+            - type: "null"
         entryPrice:
           type: number
         stopLoss:
@@ -1042,6 +1604,88 @@ components:
           type: number
         exitReason:
           type: string
+
+    DirectionTradeSummary:
+      type: object
+      required: [closedTradeCount, winRate, averagePnl, averageScore, averageDurationMinutes]
+      properties:
+        closedTradeCount:
+          type: integer
+        winRate:
+          type: number
+        averagePnl:
+          type: number
+        averageScore:
+          type: number
+        averageDurationMinutes:
+          type: number
+
+    SymbolPerformanceSummary:
+      type: object
+      required: [symbol, direction, totalPnl, averagePnl, averageScore, averageDurationMinutes, winRate, count]
+      properties:
+        symbol:
+          type: string
+        direction:
+          type: string
+          enum: [LONG, SHORT]
+        totalPnl:
+          type: number
+        averagePnl:
+          type: number
+        averageScore:
+          type: number
+        averageDurationMinutes:
+          type: number
+        winRate:
+          type: number
+        count:
+          type: integer
+
+    DirectionPerformanceSummary:
+      type: object
+      required: [days, from, closedLongTradeCount, closedShortTradeCount, longWinRate, shortWinRate, averageLongPnl, averageShortPnl, averageLongScore, averageShortScore, averageLongDurationMinutes, averageShortDurationMinutes, bestSymbols, worstSymbols, byDirection]
+      properties:
+        days:
+          type: integer
+        from:
+          type: string
+        closedLongTradeCount:
+          type: integer
+        closedShortTradeCount:
+          type: integer
+        longWinRate:
+          type: number
+        shortWinRate:
+          type: number
+        averageLongPnl:
+          type: number
+        averageShortPnl:
+          type: number
+        averageLongScore:
+          type: number
+        averageShortScore:
+          type: number
+        averageLongDurationMinutes:
+          type: number
+        averageShortDurationMinutes:
+          type: number
+        bestSymbols:
+          type: array
+          items:
+            $ref: "#/components/schemas/SymbolPerformanceSummary"
+        worstSymbols:
+          type: array
+          items:
+            $ref: "#/components/schemas/SymbolPerformanceSummary"
+        byDirection:
+          type: object
+          required: [LONG, SHORT]
+          properties:
+            LONG:
+              $ref: "#/components/schemas/DirectionTradeSummary"
+            SHORT:
+              $ref: "#/components/schemas/DirectionTradeSummary"
 
     AnalyticsDashboard:
       type: object

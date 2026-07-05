@@ -12,6 +12,7 @@ import { eq, desc, sql, and, gte, count, sum, inArray } from "drizzle-orm";
 import { configService } from "../core/config";
 import { portfolioService } from "../core/portfolio";
 import { ScannerService } from "../services/scanner";
+import { SmcScannerService } from "../services/smc-scanner";
 import { reconcileSignalStatuses } from "../services/signal-status";
 import { logger } from "../lib/logger";
 
@@ -20,6 +21,7 @@ const router = Router();
 router.get("/status", async (req, res) => {
   const scanner = ScannerService.getInstance();
   const status = scanner.getStatus();
+  const config = await configService.get();
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -52,6 +54,12 @@ router.get("/status", async (req, res) => {
     openTrades: openTrades[0]?.count ?? 0,
     dailyTrades: dailyTrades[0]?.count ?? 0,
     weeklyTrades: weeklyTrades[0]?.count ?? 0,
+    maxOpenTrades: config.scanner.maxOpenTrades,
+    maxDailyTrades: config.scanner.maxDailyTrades,
+    maxWeeklyTrades: config.scanner.maxWeeklyTrades,
+    scannerMode: config.scanner.mode,
+    minScoreTrade: config.scanner.minScoreTrade,
+    minScoreWatchlist: config.scanner.minScoreWatchlist,
     nextScanIn: status.nextScanIn,
   });
 });
@@ -66,6 +74,53 @@ router.post("/stop", async (req, res) => {
   const scanner = ScannerService.getInstance();
   scanner.stop();
   res.json({ success: true, message: "Scanner stopped" });
+});
+
+router.get("/smc/status", async (req, res) => {
+  const scanner = SmcScannerService.getInstance();
+  const status = scanner.getStatus();
+  res.json(status);
+});
+
+router.post("/smc/start", async (req, res) => {
+  const scanner = SmcScannerService.getInstance();
+  await scanner.start();
+  const status = scanner.getStatus();
+  res.json({
+    success: status.running,
+    message: status.running ? "SMC scanner started" : "SMC scanner is disabled",
+    status,
+  });
+});
+
+router.post("/smc/stop", async (req, res) => {
+  const scanner = SmcScannerService.getInstance();
+  scanner.stop();
+  res.json({ success: true, message: "SMC scanner stopped" });
+});
+
+router.get("/smc/diagnostics", async (req, res) => {
+  req.query.scannerType = "SMC_SCANNER";
+  req.query.source = "SMC";
+  const limit = Math.min(Math.max(Number(req.query.limit) || 24, 1), 50);
+  const from = new Date(Date.now() - parseWindowHours(req.query.hours, 24) * 60 * 60 * 1000);
+
+  try {
+    const decisions = await db
+      .select()
+      .from(scannerDecisionsTable)
+      .where(scannerDecisionConditions("SMC", "SMC_SCANNER", from))
+      .orderBy(desc(scannerDecisionsTable.createdAt))
+      .limit(limit);
+
+    res.json({
+      diagnosticsAvailable: true,
+      recentDecisions: decisions.map((decision) => formatDecision(decision, 0)),
+    });
+  } catch (err) {
+    logger.warn({ err }, "SMC diagnostics unavailable");
+    res.json({ diagnosticsAvailable: false, recentDecisions: [] });
+  }
 });
 
 router.get("/gainers", async (req, res) => {
@@ -155,17 +210,19 @@ router.get("/diagnostics", async (req, res) => {
       ]));
     const diagnosticsStart = latestDate([today, ...sizingSettings.map((setting) => setting.updatedAt)]);
 
+    const decisionConditions = scannerDecisionConditions(req.query.source, req.query.scannerType, diagnosticsStart);
+
     const [recentDecisionCandidates, todayDecisions, recentSnapshotCandidates, scanActivity] = await Promise.all([
       db
         .select()
         .from(scannerDecisionsTable)
-        .where(gte(scannerDecisionsTable.createdAt, diagnosticsStart))
+        .where(decisionConditions)
         .orderBy(desc(scannerDecisionsTable.createdAt))
         .limit(Math.max(limit * 20, 200)),
       db
         .select()
         .from(scannerDecisionsTable)
-        .where(gte(scannerDecisionsTable.createdAt, diagnosticsStart))
+        .where(decisionConditions)
         .orderBy(desc(scannerDecisionsTable.createdAt)),
       db
         .select()
@@ -245,6 +302,105 @@ router.get("/diagnostics", async (req, res) => {
       recentDecisions: [],
       recentSnapshots: [],
       message: "Scanner decision history is unavailable. Run database migrations to enable full diagnostics.",
+    });
+  }
+});
+
+router.get("/diagnostics/summary", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+
+  const hours = parseWindowHours(req.query.hours, 24);
+  const from = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+  try {
+    const decisions = await db
+      .select()
+      .from(scannerDecisionsTable)
+      .where(scannerDecisionConditions(req.query.source, req.query.scannerType, from))
+      .orderBy(desc(scannerDecisionsTable.createdAt));
+
+    const accepted = decisions.filter((decision) => displayDecision(decision) === "ACCEPTED");
+    const rejected = decisions.filter((decision) => displayDecision(decision) === "REJECTED");
+    const skipped = decisions.filter((decision) => displayDecision(decision) === "SKIPPED");
+    const longDecisions = decisions.filter((decision) => decision.direction === "LONG");
+    const shortDecisions = decisions.filter((decision) => decision.direction === "SHORT");
+    const shortProtectionDiagnostics = shortDecisions
+      .map((decision) => shortProtectionFromDetails(decision.diagnosticDetails))
+      .filter((diagnostic): diagnostic is Record<string, unknown> => !!diagnostic);
+
+    res.json({
+      diagnosticsAvailable: true,
+      hours,
+      from,
+      totalDiagnostics: decisions.length,
+      acceptedCount: accepted.length,
+      rejectedCount: rejected.length,
+      skippedCount: skipped.length,
+      averageTechnicalScore: average(decisions.map((decision) => Number(decision.technicalScore))),
+      averageFinalScore: average(decisions.map((decision) => Number(decision.finalScore))),
+      rejectionStageBreakdown: countNamedValues(
+        decisions
+          .map((decision) => decision.rejectionStage)
+          .filter((stage): stage is string => !!stage),
+        "stage",
+      ),
+      rejectionReasonBreakdown: countNamedValues(
+        decisions.flatMap((decision) => [
+          ...(decision.rejectionReason ? [decision.rejectionReason] : []),
+          ...asStringArray(decision.reasons),
+        ]),
+        "reason",
+      ),
+      directionCounts: {
+        LONG: longDecisions.length,
+        SHORT: shortDecisions.length,
+      },
+      longDiagnosticsCount: longDecisions.length,
+      shortDiagnosticsCount: shortDecisions.length,
+      shortWouldBlockCount: shortProtectionDiagnostics.filter((diagnostic) => diagnostic.shortProtectionWouldBlock === true).length,
+      topShortProtectionReasons: countNamedValues(
+        shortProtectionDiagnostics.flatMap((diagnostic) => asStringArray(diagnostic.shortProtectionReasons)),
+        "reason",
+      ),
+      averageScoreByDirection: {
+        LONG: averageScores(longDecisions),
+        SHORT: averageScores(shortDecisions),
+      },
+      acceptedByDirection: {
+        LONG: accepted.filter((decision) => decision.direction === "LONG").length,
+        SHORT: accepted.filter((decision) => decision.direction === "SHORT").length,
+      },
+      rejectedByDirection: {
+        LONG: rejected.filter((decision) => decision.direction === "LONG").length,
+        SHORT: rejected.filter((decision) => decision.direction === "SHORT").length,
+      },
+    });
+  } catch (err) {
+    logger.warn({ err }, "Scanner diagnostics summary unavailable");
+    res.json({
+      diagnosticsAvailable: false,
+      hours,
+      from,
+      totalDiagnostics: 0,
+      acceptedCount: 0,
+      rejectedCount: 0,
+      skippedCount: 0,
+      averageTechnicalScore: 0,
+      averageFinalScore: 0,
+      rejectionStageBreakdown: [],
+      rejectionReasonBreakdown: [],
+      directionCounts: { LONG: 0, SHORT: 0 },
+      longDiagnosticsCount: 0,
+      shortDiagnosticsCount: 0,
+      shortWouldBlockCount: 0,
+      topShortProtectionReasons: [],
+      averageScoreByDirection: {
+        LONG: { technicalScore: 0, finalScore: 0 },
+        SHORT: { technicalScore: 0, finalScore: 0 },
+      },
+      acceptedByDirection: { LONG: 0, SHORT: 0 },
+      rejectedByDirection: { LONG: 0, SHORT: 0 },
+      message: "Scanner decision history is unavailable. Run database migrations to enable diagnostics summaries.",
     });
   }
 });
@@ -366,11 +522,43 @@ async function enrichSnapshotsWithDecisions(
 
 function formatDecision(decision: typeof scannerDecisionsTable.$inferSelect, scansToday = 0) {
   const reasons = asStringArray(decision.reasons);
+  const scoreDiagnostic = scoreDiagnosticFromDetails(decision.diagnosticDetails);
+  const smcDiagnostic = smcDiagnosticFromDetails(decision.diagnosticDetails);
 
   return {
     id: decision.id,
     symbol: decision.symbol,
     direction: decision.direction,
+    source: decision.source ?? "TECHNICAL",
+    scannerType: decision.scannerType ?? "TECHNICAL_SCANNER",
+    strategyType: decision.strategyType ?? "TECHNICAL",
+    strategyLabel: decision.strategyLabel,
+    badge: decision.badge,
+    smcScore: decision.smcScore == null ? null : Number(decision.smcScore),
+    smcDetails: decision.smcDetails ?? null,
+    componentScores: decision.componentScores ?? null,
+    diagnosticDetails: decision.diagnosticDetails ?? null,
+    scannerMode: scoreDiagnostic.scannerMode,
+    tradeGrade: scoreDiagnostic.tradeGrade,
+    scoreDecision: scoreDiagnostic.scoreDecision,
+    scoreDecisionReason: scoreDiagnostic.scoreDecisionReason,
+    htfBias: smcDiagnostic.htfBias,
+    liquiditySweep: smcDiagnostic.liquiditySweep,
+    structure: smcDiagnostic.structure,
+    fvg: smcDiagnostic.fvg,
+    orderBlock: smcDiagnostic.orderBlock,
+    premiumDiscount: smcDiagnostic.premiumDiscount,
+    fibonacci: smcDiagnostic.fibonacci,
+    riskReward: smcDiagnostic.riskReward,
+    paperTradeOpened: smcDiagnostic.paperTradeOpened,
+    paperTradeId: smcDiagnostic.paperTradeId,
+    paperTradeBlockedReason: smcDiagnostic.paperTradeBlockedReason,
+    rejectionStage: decision.rejectionStage,
+    rejectionReason: decision.rejectionReason,
+    blockedReason: decision.blockedReason,
+    shortProtection: shortProtectionFromDetails(decision.diagnosticDetails),
+    shortProtectionWouldBlock: shortProtectionFromDetails(decision.diagnosticDetails)?.shortProtectionWouldBlock ?? false,
+    shortProtectionReasons: shortProtectionFromDetails(decision.diagnosticDetails)?.shortProtectionReasons ?? [],
     decision: displayDecision(decision),
     strategy: decision.strategy,
     finalScore: Number(decision.finalScore),
@@ -385,6 +573,81 @@ function formatDecision(decision: typeof scannerDecisionsTable.$inferSelect, sca
     scoreAvailable: hasDecisionScore(decision),
     createdAt: decision.createdAt,
   };
+}
+
+function smcDiagnosticFromDetails(details: unknown) {
+  if (!details || typeof details !== "object") {
+    return {
+      htfBias: null,
+      liquiditySweep: null,
+      structure: null,
+      fvg: null,
+      orderBlock: null,
+      premiumDiscount: null,
+      fibonacci: null,
+      riskReward: null,
+      paperTradeOpened: false,
+      paperTradeId: null,
+      paperTradeBlockedReason: null,
+    };
+  }
+
+  const value = details as Record<string, unknown>;
+  return {
+    htfBias: typeof value.htfBias === "string" ? value.htfBias : null,
+    liquiditySweep: typeof value.liquiditySweep === "string" ? value.liquiditySweep : null,
+    structure: typeof value.structure === "string" ? value.structure : null,
+    fvg: typeof value.fvg === "string" ? value.fvg : null,
+    orderBlock: typeof value.orderBlock === "string" ? value.orderBlock : null,
+    premiumDiscount: typeof value.premiumDiscount === "string" ? value.premiumDiscount : null,
+    fibonacci: typeof value.fibonacci === "string" ? value.fibonacci : null,
+    riskReward: typeof value.riskReward === "string" ? value.riskReward : null,
+    paperTradeOpened: value.paperTradeOpened === true,
+    paperTradeId: typeof value.paperTradeId === "string" ? value.paperTradeId : null,
+    paperTradeBlockedReason: typeof value.paperTradeBlockedReason === "string" ? value.paperTradeBlockedReason : null,
+  };
+}
+
+function scoreDiagnosticFromDetails(details: unknown) {
+  if (!details || typeof details !== "object") {
+    return {
+      scannerMode: null,
+      tradeGrade: null,
+      scoreDecision: null,
+      scoreDecisionReason: null,
+    };
+  }
+
+  const value = details as {
+    scannerMode?: unknown;
+    tradeGrade?: unknown;
+    scoreDecision?: unknown;
+    scoreDecisionReason?: unknown;
+  };
+
+  return {
+    scannerMode: typeof value.scannerMode === "string" ? value.scannerMode : null,
+    tradeGrade: typeof value.tradeGrade === "string" ? value.tradeGrade : null,
+    scoreDecision: typeof value.scoreDecision === "string" ? value.scoreDecision : null,
+    scoreDecisionReason: typeof value.scoreDecisionReason === "string" ? value.scoreDecisionReason : null,
+  };
+}
+
+function shortProtectionFromDetails(details: unknown): any | null {
+  if (!details || typeof details !== "object") return null;
+  const value = (details as { shortProtection?: unknown }).shortProtection;
+  return value && typeof value === "object" ? value : null;
+}
+
+function scannerDecisionConditions(source: unknown, scannerType: unknown, from: Date) {
+  const conditions = [gte(scannerDecisionsTable.createdAt, from)];
+  if (source && ["TECHNICAL", "SMC"].includes(source as string)) {
+    conditions.push(eq(scannerDecisionsTable.source, source as string));
+  }
+  if (scannerType && ["TECHNICAL_SCANNER", "SMC_SCANNER"].includes(scannerType as string)) {
+    conditions.push(eq(scannerDecisionsTable.scannerType, scannerType as string));
+  }
+  return conditions.length > 1 ? and(...conditions) : conditions[0];
 }
 
 function hasDecisionScore(decision: typeof scannerDecisionsTable.$inferSelect): boolean {
@@ -439,8 +702,21 @@ function average(values: number[]): number {
   return numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length;
 }
 
+function averageScores(decisions: Array<typeof scannerDecisionsTable.$inferSelect>) {
+  return {
+    technicalScore: average(decisions.map((decision) => Number(decision.technicalScore))),
+    finalScore: average(decisions.map((decision) => Number(decision.finalScore))),
+  };
+}
+
 function latestDate(values: Date[]): Date {
   return values.reduce((latest, value) => value > latest ? value : latest, values[0] ?? new Date());
+}
+
+function parseWindowHours(value: unknown, defaultHours: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return defaultHours;
+  return Math.min(Math.max(Math.floor(parsed), 1), 720);
 }
 
 function countValues(values: string[]): Array<{ reason: string; count: number }> {
@@ -453,6 +729,22 @@ function countValues(values: string[]): Array<{ reason: string; count: number }>
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(([reason, count]) => ({ reason, count }));
+}
+
+function countNamedValues<TName extends string>(
+  values: string[],
+  name: TName,
+  limit = 10,
+): Array<Record<TName, string> & { count: number }> {
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([value, count]) => ({ [name]: value, count }) as Record<TName, string> & { count: number });
 }
 
 function emptyDiagnosticsSummary() {

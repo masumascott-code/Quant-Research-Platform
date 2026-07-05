@@ -1,4 +1,7 @@
+export type ScannerMode = "classic" | "conservative_v2";
+
 export interface ScannerRuntimeConfig {
+  mode: ScannerMode;
   binanceBaseUrl: string;
   scanIntervalMs: number;
   minVolume24h: number;
@@ -23,6 +26,57 @@ export interface ScannerRuntimeConfig {
   maxOpenTrades: number;
   maxDailyTrades: number;
   maxWeeklyTrades: number;
+  requireRetestForTrade: boolean;
+  allowBreakoutWithoutRetestToWatchlist: boolean;
+}
+
+export interface ShortProtectionRuntimeConfig {
+  enabled: boolean;
+  diagnosticOnly: boolean;
+  requireBearishMarketForShorts: boolean;
+  blockShortsInBullishRegime: boolean;
+  requireShortRetest: boolean;
+  maxShortExtensionFromEMA20: number;
+  maxShortExtensionFromEMA50: number;
+  maxNegative24hMoveForFreshShort: number;
+}
+
+export interface LongProtectionRuntimeConfig {
+  enabled: boolean;
+  maxLongExtensionFromEMA20: number;
+  maxLongExtensionFromEMA50: number;
+  watchlistInsteadOfReject: boolean;
+}
+
+export interface SmcScannerRuntimeConfig {
+  enabled: boolean;
+  shadowMode: boolean;
+  scanIntervalMs: number;
+  minQuoteVolume: number;
+  maxCandidates: number;
+  minSmcScoreTrade: number;
+  minSmcScoreWatchlist: number;
+  minRiskReward: number;
+  maxOpenTrades: number;
+  maxDailyTrades: number;
+  requireHtfBias: boolean;
+  requireLiquiditySweep: boolean;
+  requireBOSorCHOCH: boolean;
+  requireFvgOrOrderBlock: boolean;
+  requirePremiumDiscount: boolean;
+  useFibonacciConfluence: boolean;
+  allowWatchlistWithoutEntry: boolean;
+  paperTradingEnabled: boolean;
+  candles5mLimit: number;
+  candles15mLimit: number;
+  candlesH1Limit: number;
+  candlesH4Limit: number;
+  symbolCooldownMs: number;
+  symbolCooldownMinutes: number;
+}
+
+export interface FeatureFlagRuntimeConfig {
+  enabled: boolean;
 }
 
 export interface SignalRuntimeConfig {
@@ -164,6 +218,14 @@ export interface NotificationsRuntimeConfig {
 
 export interface RuntimeConfig {
   scanner: ScannerRuntimeConfig;
+  shortProtection: ShortProtectionRuntimeConfig;
+  longProtection: LongProtectionRuntimeConfig;
+  smcScanner: SmcScannerRuntimeConfig;
+  futuresEngine: FeatureFlagRuntimeConfig;
+  setupDna: FeatureFlagRuntimeConfig;
+  tradeForensics: FeatureFlagRuntimeConfig;
+  backtesting: FeatureFlagRuntimeConfig;
+  ruleBuilder: FeatureFlagRuntimeConfig;
   signal: SignalRuntimeConfig;
   risk: RiskRuntimeConfig;
   paperTrading: PaperTradingRuntimeConfig;
